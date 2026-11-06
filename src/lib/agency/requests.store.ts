@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { randomBytes } from 'node:crypto'
 import { parseEnv } from '../env'
 import type { Tenant } from '../tenancy/resolve'
-import type { RequestRow, RequestStore } from './requests'
+import type { RequestStore } from './requests'
 
 export function createServiceClient(): SupabaseClient {
   const env = parseEnv(process.env)
@@ -67,16 +67,20 @@ export function createSupabaseTenant(
 export function createSupabaseRequestStore(
   supabase: SupabaseClient = createServiceClient(),
 ): RequestStore {
-  // Conditional update; true when exactly one row matched the guard.
+  // Guard shared by claim and reject: pending, or approved with no tenant and a stale claim.
+  const claimable = (staleBefore: Date) =>
+    `status.eq.pending,and(status.eq.approved,tenant_id.is.null,or(approved_at.is.null,approved_at.lt.${staleBefore.toISOString()}))`
+
   async function transition(
     id: string,
-    to: RequestRow['status'],
+    patch: Record<string, unknown>,
+    staleBefore: Date,
   ): Promise<boolean> {
     const { data, error } = await supabase
       .from('client_requests')
-      .update({ status: to })
+      .update(patch)
       .eq('id', id)
-      .eq('status', 'pending')
+      .or(claimable(staleBefore))
       .select('id')
     if (error) throw error
     return (data?.length ?? 0) === 1
@@ -86,7 +90,7 @@ export function createSupabaseRequestStore(
     async get(id) {
       const { data, error } = await supabase
         .from('client_requests')
-        .select('id, business_name, status, tenant_id')
+        .select('id, business_name, status, tenant_id, approved_at')
         .eq('id', id)
         .maybeSingle()
       if (error) throw error
@@ -96,28 +100,38 @@ export function createSupabaseRequestStore(
         businessName: data.business_name,
         status: data.status,
         tenantId: data.tenant_id,
+        approvedAt: data.approved_at ? new Date(data.approved_at) : null,
       }
     },
-    claim: (id) => transition(id, 'approved'),
+    claim: (id, staleBefore) =>
+      transition(id, { status: 'approved', approved_at: new Date().toISOString() }, staleBefore),
     async complete(id, tenantId) {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('client_requests')
         .update({ tenant_id: tenantId })
         .eq('id', id)
         .eq('status', 'approved')
         .is('tenant_id', null)
+        .select('id')
       if (error) throw error
+      if (data?.length !== 1) {
+        throw new Error(`Could not link tenant to request ${id}`)
+      }
     },
     async release(id) {
       const { error } = await supabase
         .from('client_requests')
-        .update({ status: 'pending' })
+        .update({ status: 'pending', approved_at: null })
         .eq('id', id)
         .eq('status', 'approved')
         .is('tenant_id', null)
       if (error) throw error
     },
-    reject: (id) => transition(id, 'rejected'),
+    reject: (id, staleBefore) => transition(id, { status: 'rejected' }, staleBefore),
+    async deleteTenant(tenantId) {
+      const { error } = await supabase.from('tenants').delete().eq('id', tenantId)
+      if (error) throw error
+    },
     async findTenant(tenantId) {
       const { data, error } = await supabase
         .from('tenants')

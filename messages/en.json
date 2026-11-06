@@ -32,8 +32,11 @@
       "status": {
         "pending": "Pending",
         "approved": "Approved",
-        "rejected": "Rejected"
-      }
+        "rejected": "Rejected",
+        "approvedNoTenant": "Approved, no store",
+        "approving": "Approving..."
+      },
+      "retryApprove": "Retry approval"
     }
   },
   "wizard": {

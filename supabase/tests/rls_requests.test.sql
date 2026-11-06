@@ -1,5 +1,5 @@
 begin;
-select plan(19);
+select plan(23);
 
 insert into auth.users (id, instance_id, aud, role, email) values
   ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@test.local'),
@@ -10,7 +10,10 @@ insert into tenants (id, slug, name) values ('10000000-0000-0000-0000-0000000000
 -- anon
 set local role anon;
 select lives_ok($$insert into client_requests (business_name, contact_email, country) values ('Tienda Uno', 'uno@test.local', 'HN')$$, 'anon can insert a pending request');
-select lives_ok($$insert into client_requests (business_name, contact_email, country, status) values ('Tienda Dos', 'dos@test.local', 'HN', 'pending')$$, 'anon can insert explicit pending');
+select lives_ok($$insert into client_requests (business_name, contact_email, country) values ('Tienda Dos', 'dos@test.local', 'HN')$$, 'anon can insert with only the allowed columns');
+select throws_ok($$insert into client_requests (id, business_name, contact_email, country) values (gen_random_uuid(), 'X', 'x@test.local', 'HN')$$, '42501', null, 'anon cannot set id');
+select throws_ok($$insert into client_requests (business_name, contact_email, country, created_at) values ('X', 'x@test.local', 'HN', now() + interval '10 years')$$, '42501', null, 'anon cannot set created_at');
+select throws_ok($$insert into client_requests (business_name, contact_email, country, approved_at) values ('X', 'x@test.local', 'HN', now())$$, '42501', null, 'anon cannot set approved_at');
 select throws_ok($$insert into client_requests (business_name, contact_email, country, status) values ('X', 'x@test.local', 'HN', 'approved')$$, '42501', null, 'anon cannot insert approved');
 select throws_ok($$insert into client_requests (business_name, contact_email, country, tenant_id) values ('X', 'x@test.local', 'HN', '10000000-0000-0000-0000-00000000000a')$$, '42501', null, 'anon cannot insert with tenant_id');
 select throws_ok($$select count(*) from client_requests$$, '42501', null, 'anon cannot read');
@@ -26,6 +29,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
 select lives_ok($$insert into client_requests (business_name, contact_email, country) values ('Tienda Tres', 'tres@test.local', 'SV')$$, 'authenticated can insert pending');
 select throws_ok($$insert into client_requests (business_name, contact_email, country, status) values ('X', 'x@test.local', 'HN', 'rejected')$$, '42501', null, 'authenticated cannot insert rejected');
+select throws_ok($$insert into client_requests (business_name, contact_email, country, created_at) values ('X', 'x@test.local', 'HN', now())$$, '42501', null, 'authenticated cannot set created_at');
 select is((select count(*) from client_requests), 0::bigint, 'non-admin reads nothing');
 update client_requests set status = 'approved';
 delete from client_requests;
