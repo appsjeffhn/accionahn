@@ -13,6 +13,9 @@ describe('checkMigrationSafety', () => {
     ['alter column set data type', 'alter table t alter column c set data type bigint;'],
     ['drop schema', 'drop schema s cascade;'],
     ['truncate', 'truncate table t;'],
+    ['alter type without column keyword', 'alter table t alter c type bigint;'],
+    ['alter set data type without column keyword', 'alter table t alter c set data type text;'],
+    ['alter type multi-line uppercase', 'ALTER TABLE t\n  ALTER c TYPE int;'],
     ['bare drop column', 'alter table t drop c;'],
   ])('flags %s', (_name, sql) => {
     expect(checkMigrationSafety(sql)).toHaveLength(1)
@@ -28,6 +31,8 @@ describe('checkMigrationSafety', () => {
     ['drop index', 'drop index if exists i;'],
     ['drop constraint', 'alter table t drop constraint k;'],
     ['drop not null', 'alter table t alter column c drop not null;'],
+    ['set default', 'alter table t alter column c set default 1;'],
+    ['set not null without column keyword', 'alter table t alter c set not null;'],
     ['drop default', 'alter table t alter column c drop default;'],
   ])('allows %s', (_name, sql) => {
     expect(checkMigrationSafety(sql)).toEqual([])

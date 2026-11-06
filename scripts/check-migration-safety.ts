@@ -12,6 +12,8 @@ import { pathToFileURL } from 'node:url'
 //   - constraint: relaxing or re-creating a rule the migration owns.
 //   - not, default, identity, expression: `alter column ... drop not null/default/...`
 //     relax a column, they never remove data.
+// Dynamic SQL inside strings (execute 'drop table t') is invisible by design:
+// string literals are blanked, so such statements need review by a human.
 // A justified destructive change must carry `-- allow-unsafe: <reason>` on the same
 // line as the offending keyword so it is visible in review.
 const ALLOWED_DROP_KINDS = new Set([
@@ -98,7 +100,7 @@ const RULES: Rule[] = [
     message: () => 'rename column breaks old code',
   },
   {
-    pattern: /\balter\s+column\s+[\w"]+\s+(?:set\s+data\s+)?(type)\b/gi,
+    pattern: /\balter\s+(?:column\s+)?[\w"]+\s+(?:set\s+data\s+)?(type)\b/gi,
     message: () => 'alter column type may rewrite or break data',
   },
   { pattern: /\b(truncate)\b/gi, message: () => 'truncate removes data' },

@@ -1,5 +1,8 @@
 type SeedEnv = Record<string, string | undefined>
 
+const PLACEHOLDER_PASSWORDS = new Set(['change-me-before-running', 'changeme', 'password'])
+const MIN_PASSWORD_LENGTH = 12
+
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 function parseUrl(raw: string | undefined): URL {
@@ -36,5 +39,11 @@ export function assertSeedAllowed(env: SeedEnv): void {
   }
 
   if (!env.SEED_ADMIN_EMAIL) throw new Error('Seed aborted: SEED_ADMIN_EMAIL is not set.')
-  if (!env.SEED_ADMIN_PASSWORD) throw new Error('Seed aborted: SEED_ADMIN_PASSWORD is not set.')
+  const password = env.SEED_ADMIN_PASSWORD
+  if (!password) throw new Error('Seed aborted: SEED_ADMIN_PASSWORD is not set.')
+  if (password.length < MIN_PASSWORD_LENGTH || PLACEHOLDER_PASSWORDS.has(password.toLowerCase())) {
+    throw new Error(
+      `Seed aborted: SEED_ADMIN_PASSWORD is a placeholder or shorter than ${MIN_PASSWORD_LENGTH} characters. Set a real password in your shell.`,
+    )
+  }
 }
