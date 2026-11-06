@@ -27,6 +27,26 @@ export function planCallback(params: URLSearchParams, hostTenantId: string | nul
   return { kind: 'invalid' }
 }
 
+// /auth/set-password only works right after an emailed one-time link was verified,
+// so a session opened with a password (or a stolen cookie) cannot silently change it.
+export const SET_PASSWORD_WINDOW_S = 15 * 60
+const LINK_METHODS = new Set(['invite', 'recovery', 'otp', 'magiclink'])
+const CLOCK_SKEW_S = 60
+
+// amr is the access token claim: [{ method, timestamp (unix seconds) }]. The plain
+// string form carries no time, so it is refused.
+export function canSetPassword(amr: unknown, nowSeconds: number): boolean {
+  if (!Array.isArray(amr)) return false
+  return amr.some((entry) => {
+    if (!entry || typeof entry !== 'object') return false
+    const { method, timestamp } = entry as { method?: unknown; timestamp?: unknown }
+    if (typeof method !== 'string' || !LINK_METHODS.has(method)) return false
+    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return false
+    const age = nowSeconds - timestamp
+    return age <= SET_PASSWORD_WINDOW_S && age >= -CLOCK_SKEW_S
+  })
+}
+
 export const MIN_PASSWORD = 12
 // bcrypt, used by Supabase Auth, ignores bytes past 72.
 export const MAX_PASSWORD = 72

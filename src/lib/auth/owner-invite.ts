@@ -40,7 +40,12 @@ export type OwnerInviteStore = {
     tenantId: string,
   ) => Promise<{ status: 'pending' | 'active' | 'suspended'; hostname: string | null } | null>
   // confirmed: the user accepted an invitation or confirmed their email.
-  findUserByEmail: (email: string) => Promise<{ id: string; confirmed: boolean } | null>
+  // invited: auth.users.invited_at is set, i.e. the account was created by an invitation.
+  findUserByEmail: (
+    email: string,
+  ) => Promise<{ id: string; confirmed: boolean; invited: boolean } | null>
+  // Auth admin delete (memberships cascade).
+  deleteUser: (userId: string) => Promise<void>
   isAgencyAdmin: (userId: string) => Promise<boolean>
   membershipOf: (userId: string) => Promise<{ tenantId: string } | null>
   // Creates the user (or re-sends to an unconfirmed one) and emails the invitation link.
@@ -86,6 +91,12 @@ export async function inviteOwner(
     if (existing.confirmed) {
       if (membership) return // already the owner here and already accepted
       throw new ExistingAccountError()
+    }
+    if (!existing.invited) {
+      // Unconfirmed self-signup: whoever created it chose its password, and confirming
+      // the invitation would make that password valid. It was never usable (unconfirmed),
+      // so it is removed and the invitation creates a clean account.
+      await store.deleteUser(existing.id)
     }
   }
 

@@ -13,7 +13,9 @@ import { ForbiddenError, type Session } from './session'
 const admin: Session = { userId: 'admin-1', role: 'agency_admin', tenantId: null }
 const owner: Session = { userId: 'owner-1', role: 'business_owner', tenantId: 'T1' }
 
-type User = { id: string; email: string; confirmed: boolean }
+// invited: auth.users.invited_at is set (the account came from an invitation).
+// password: stands for credentials the account already holds.
+type User = { id: string; email: string; confirmed: boolean; invited?: boolean; password?: string }
 type Tenant = { status: 'pending' | 'active' | 'suspended'; hostname: string | null }
 
 // In-memory double: memberships.user_id is unique like the real table.
@@ -31,13 +33,20 @@ function makeStore(init: {
   const admins = new Set(init.admins ?? [])
   const memberships = new Map(Object.entries(init.memberships ?? {}))
   const invites: { email: string; redirectTo: string }[] = []
+  const deleted: string[] = []
   let nextId = 1
 
   const store: OwnerInviteStore = {
     getTenant: async (id) => tenants.get(id) ?? null,
     findUserByEmail: async (email) => {
       const u = users.find((x) => x.email === email)
-      return u ? { id: u.id, confirmed: u.confirmed } : null
+      return u ? { id: u.id, confirmed: u.confirmed, invited: Boolean(u.invited) } : null
+    },
+    deleteUser: async (userId) => {
+      deleted.push(userId)
+      const i = users.findIndex((x) => x.id === userId)
+      if (i >= 0) users.splice(i, 1)
+      memberships.delete(userId) // on delete cascade
     },
     isAgencyAdmin: async (userId) => admins.has(userId),
     membershipOf: async (userId) => {
@@ -52,6 +61,7 @@ function makeStore(init: {
         u = { id: `new-${nextId++}`, email, confirmed: false }
         users.push(u)
       }
+      u.invited = true
       return { id: u.id }
     },
     insertOwnerMembership: async (userId, tenantId) => {
@@ -60,7 +70,7 @@ function makeStore(init: {
       return 'inserted'
     },
   }
-  return { store, users, memberships, invites }
+  return { store, users, memberships, invites, deleted }
 }
 
 const callback = (host: string) => `https://${host}/auth/callback`
@@ -151,11 +161,54 @@ describe('inviteOwner', () => {
     expect(s.invites).toEqual([])
   })
 
-  it('re-sends and attaches an unconfirmed account that has no membership yet', async () => {
-    const s = makeStore({ users: [{ id: 'u5', email: 'libre@x.hn', confirmed: false }] })
-    await inviteOwner(admin, 'T1', 'libre@x.hn', { store: s.store, callbackUrl: callback })
+  it('never attaches an unconfirmed self-signup: deletes it and invites a fresh account', async () => {
+    const s = makeStore({
+      users: [{ id: 'attacker', email: 'dueno@spezia.hn', confirmed: false, password: 'attacker-pw' }],
+    })
+    await inviteOwner(admin, 'T1', 'dueno@spezia.hn', { store: s.store, callbackUrl: callback })
+    expect(s.deleted).toEqual(['attacker'])
+    expect(s.memberships.has('attacker')).toBe(false)
+    expect(s.users).toHaveLength(1)
+    const owner = s.users[0]
+    expect(owner.id).not.toBe('attacker')
+    expect(owner.password).toBeUndefined() // the attacker's credentials are gone with the account
+    expect([...s.memberships]).toEqual([[owner.id, 'T1']])
     expect(s.invites).toHaveLength(1)
+  })
+
+  it('a self-signup that belongs to another tenant is refused, not deleted', async () => {
+    const s = makeStore({
+      users: [{ id: 'u7', email: 'x@y.hn', confirmed: false }],
+      memberships: { u7: 'T2' },
+    })
+    await expect(
+      inviteOwner(admin, 'T1', 'x@y.hn', { store: s.store, callbackUrl: callback }),
+    ).rejects.toThrow(AlreadyMemberError)
+    expect(s.deleted).toEqual([])
+  })
+
+  it('an invited, still unconfirmed account stays idempotent (re-sent, same user, one membership)', async () => {
+    const s = makeStore({
+      users: [{ id: 'u5', email: 'libre@x.hn', confirmed: false, invited: true }],
+      memberships: { u5: 'T1' },
+    })
+    await inviteOwner(admin, 'T1', 'libre@x.hn', { store: s.store, callbackUrl: callback })
+    await inviteOwner(admin, 'T1', 'libre@x.hn', { store: s.store, callbackUrl: callback })
+    expect(s.deleted).toEqual([])
+    expect(s.invites).toHaveLength(2)
+    expect(s.users.map((u) => u.id)).toEqual(['u5'])
     expect([...s.memberships]).toEqual([['u5', 'T1']])
+  })
+
+  it('a confirmed account without store is still ExistingAccountError, even if once invited', async () => {
+    const s = makeStore({
+      users: [{ id: 'u6', email: 'old@x.hn', confirmed: true, invited: true }],
+    })
+    await expect(
+      inviteOwner(admin, 'T1', 'old@x.hn', { store: s.store, callbackUrl: callback }),
+    ).rejects.toThrow(ExistingAccountError)
+    expect(s.deleted).toEqual([])
+    expect(s.memberships.size).toBe(0)
   })
 
   it('reports AlreadyMemberError when another tenant wins the membership race', async () => {

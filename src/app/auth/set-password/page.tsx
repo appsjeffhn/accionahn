@@ -5,6 +5,7 @@ import { defaultNextPath, safeNextPath } from "@/lib/auth/login";
 import { getUserClient } from "@/lib/auth/session";
 import { TENANT_ID_HEADER } from "@/lib/routing/decide-request";
 import { setPassword } from "./actions";
+import { mayChangePassword } from "./guard";
 import { SetPasswordForm } from "./set-password-form";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,7 @@ export default async function SetPasswordPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { data } = await (await getUserClient()).auth.getUser();
-  if (!data.user) redirect("/login?error=link");
+  if (!(await mayChangePassword(await getUserClient()))) redirect("/login?error=link");
 
   const params = await searchParams;
   const hostTenantId = (await headers()).get(TENANT_ID_HEADER);

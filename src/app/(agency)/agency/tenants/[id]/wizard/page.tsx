@@ -9,9 +9,8 @@ import {
   callbackUrlFor,
   inviteOwner,
 } from "@/lib/auth/owner-invite";
-import { ForbiddenError, getSession, requireRole } from "@/lib/auth/session";
+import { ForbiddenError, getSession, getUserClient, requireRole } from "@/lib/auth/session";
 import { parseEnv } from "@/lib/env";
-import { createServiceClient } from "@/lib/supabase/service";
 import {
   EXTRA_CURRENCY_ROWS,
   submittedValues,
@@ -69,7 +68,8 @@ export default async function WizardPage({
   requireRole(await getSession(), "agency_admin");
   const { id } = await params;
   const t = await getTranslations("wizard");
-  const { data: tenant, error: tenantError } = await createServiceClient()
+  // As the signed-in admin under RLS; the service key stays confined to auth.admin.*.
+  const { data: tenant, error: tenantError } = await (await getUserClient())
     .from("tenants")
     .select("status")
     .eq("id", id)

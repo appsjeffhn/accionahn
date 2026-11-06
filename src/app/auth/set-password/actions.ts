@@ -6,6 +6,7 @@ import { checkNewPassword } from "@/lib/auth/invite-accept";
 import { defaultNextPath, safeNextPath } from "@/lib/auth/login";
 import { getUserClient } from "@/lib/auth/session";
 import { TENANT_ID_HEADER } from "@/lib/routing/decide-request";
+import { mayChangePassword } from "./guard";
 
 export type SetPasswordState = {
   error: "tooShort" | "tooLong" | "mismatch" | "weak" | "failed" | null;
@@ -27,8 +28,7 @@ export async function setPassword(
   if (problem) return { error: problem };
 
   const supabase = await getUserClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) redirect("/login?error=link");
+  if (!(await mayChangePassword(supabase))) redirect("/login?error=link");
 
   const { error } = await supabase.auth.updateUser({ password });
   if (error) {

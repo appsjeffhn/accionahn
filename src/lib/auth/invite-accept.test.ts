@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { MIN_PASSWORD, checkNewPassword, planCallback } from './invite-accept'
+import {
+  MIN_PASSWORD,
+  SET_PASSWORD_WINDOW_S,
+  canSetPassword,
+  checkNewPassword,
+  planCallback,
+} from './invite-accept'
 
 const q = (o: Record<string, string>) => new URLSearchParams(o)
 
@@ -49,6 +55,38 @@ describe('planCallback', () => {
   ])('refuses %j', (params) => {
     expect(planCallback(q(params as Record<string, string>), 'T1')).toEqual({ kind: 'invalid' })
   })
+})
+
+describe('canSetPassword', () => {
+  const now = 1_800_000_000
+  const at = (method: string, ago: number) => ({ method, timestamp: now - ago })
+
+  it.each(['invite', 'recovery', 'otp', 'magiclink'])(
+    'allows a session verified by %s within the window',
+    (method) => {
+      expect(canSetPassword([at('password', 5000), at(method, 60)], now)).toBe(true)
+      expect(canSetPassword([at(method, SET_PASSWORD_WINDOW_S)], now)).toBe(true)
+    },
+  )
+
+  it('refuses a plain password session', () => {
+    expect(canSetPassword([at('password', 10)], now)).toBe(false)
+  })
+
+  it('refuses a verification older than the window', () => {
+    expect(canSetPassword([at('invite', SET_PASSWORD_WINDOW_S + 1)], now)).toBe(false)
+  })
+
+  it('refuses a timestamp from the future (clock skew beyond a minute)', () => {
+    expect(canSetPassword([at('invite', -120)], now)).toBe(false)
+  })
+
+  it.each([undefined, null, 'invite', [], ['invite'], [{ method: 'invite' }], [{ method: 'invite', timestamp: 'x' }]])(
+    'refuses malformed or timestamp-less amr %j',
+    (amr) => {
+      expect(canSetPassword(amr, now)).toBe(false)
+    },
+  )
 })
 
 describe('checkNewPassword', () => {

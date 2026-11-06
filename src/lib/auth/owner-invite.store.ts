@@ -12,7 +12,7 @@ const MAX_USER_PAGES = 20
 
 // Table reads and writes run as the signed-in agency admin, so RLS (is_agency_admin)
 // still applies; service_role has no grant on memberships at all. The service client
-// is used only for the Auth admin API (find users, send the invitation).
+// is used only for the Auth admin API (find, delete self-signups, send the invitation).
 export async function createSupabaseOwnerInviteStore(
   db?: SupabaseClient,
   admin: SupabaseClient = createServiceClient(),
@@ -41,10 +41,21 @@ export async function createSupabaseOwnerInviteStore(
         const { data, error } = await admin.auth.admin.listUsers({ page, perPage: USERS_PER_PAGE })
         if (error) throw error
         const user = data.users.find((u) => u.email?.toLowerCase() === email)
-        if (user) return { id: user.id, confirmed: Boolean(user.email_confirmed_at) }
+        if (user) {
+          return {
+            id: user.id,
+            confirmed: Boolean(user.email_confirmed_at),
+            invited: Boolean(user.invited_at),
+          }
+        }
         if (data.users.length < USERS_PER_PAGE) return null
       }
       throw new Error('Too many users to search by email')
+    },
+
+    async deleteUser(userId) {
+      const { error } = await admin.auth.admin.deleteUser(userId)
+      if (error) throw error
     },
 
     async isAgencyAdmin(userId) {
