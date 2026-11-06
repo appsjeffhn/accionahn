@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Tenant } from '../tenancy/resolve'
-import { createServiceClient } from './requests.store'
+import { createServiceClient } from '../supabase/service'
 import { SlugTakenError, WizardStateError, type WizardStore } from './wizard'
 
 const UNIQUE_VIOLATION = '23505'

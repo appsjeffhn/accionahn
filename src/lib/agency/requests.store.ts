@@ -1,15 +1,8 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { randomBytes } from 'node:crypto'
-import { parseEnv } from '../env'
+import { createServiceClient } from '../supabase/service'
 import type { Tenant } from '../tenancy/resolve'
 import type { RequestStore } from './requests'
-
-export function createServiceClient(): SupabaseClient {
-  const env = parseEnv(process.env)
-  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-}
 
 type TenantRow = {
   id: string

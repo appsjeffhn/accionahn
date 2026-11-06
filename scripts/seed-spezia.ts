@@ -1,5 +1,8 @@
+// Run with `pnpm seed:spezia`: the script passes --conditions=react-server so the
+// server-only guard on the service-role stores resolves to its empty module in this
+// trusted Node script (a plain `tsx scripts/seed-spezia.ts` fails on that guard).
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createServiceClient } from '../src/lib/agency/requests.store'
+import { createServiceClient } from '../src/lib/supabase/service-core'
 import { completeWizard } from '../src/lib/agency/wizard'
 import { wizardInputSchema } from '../src/lib/agency/wizard-schema'
 import { createSupabaseWizardStore } from '../src/lib/agency/wizard.store'

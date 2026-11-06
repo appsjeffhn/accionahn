@@ -6,10 +6,8 @@ import {
   isStaleClaim,
   rejectRequest,
 } from "@/lib/agency/requests";
-import {
-  createServiceClient,
-  createSupabaseTenant,
-} from "@/lib/agency/requests.store";
+import { createSupabaseTenant } from "@/lib/agency/requests.store";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 

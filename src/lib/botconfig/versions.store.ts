@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createServiceClient } from '../agency/requests.store'
+import { createServiceClient } from '../supabase/service'
 import { BotConfigNotFoundError, type BotConfigStore } from './versions'
 
 // P0002 is raised by the SQL functions for an unknown tenant or version.

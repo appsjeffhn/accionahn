@@ -1,5 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-import { parseEnv } from '../env'
+import { createServiceClient } from '../supabase/service'
 import type { Tenant } from './resolve'
 
 type TenantRow = {
@@ -16,11 +15,7 @@ type TenantRow = {
 export async function lookupTenantByHostname(
   hostname: string,
 ): Promise<Tenant | null> {
-  const env = parseEnv(process.env)
-  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-  const { data, error } = await supabase
+  const { data, error } = await createServiceClient()
     .from('tenant_domains')
     .select(
       'tenants(id, slug, name, status, cohort, default_locale, base_currency, enabled_currencies)',

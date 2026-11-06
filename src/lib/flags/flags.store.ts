@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createServiceClient } from '../agency/requests.store'
+import { createServiceClient } from '../supabase/service'
 import { isRollout, type FlagStore } from './flags'
 
 export function createSupabaseFlagStore(
