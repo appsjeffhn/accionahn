@@ -28,14 +28,11 @@ describe('parseEnv', () => {
     expect(parseEnv({ ...valid, CRON_SECRET: '' }).CRON_SECRET).toBeUndefined()
   })
 
-  it('CRON_SECRET es obligatorio en staging y produccion', () => {
+  it('sin CRON_SECRET o con uno corto el entorno sigue siendo valido en staging y produccion (lo valida solo la ruta cron)', () => {
     for (const APP_ENV of ['staging', 'production']) {
-      expect(() => parseEnv({ ...valid, APP_ENV })).toThrowError(/CRON_SECRET/)
+      expect(parseEnv({ ...valid, APP_ENV }).CRON_SECRET).toBeUndefined()
+      expect(parseEnv({ ...valid, APP_ENV, CRON_SECRET: 'short' }).CRON_SECRET).toBe('short')
       expect(parseEnv({ ...valid, APP_ENV, CRON_SECRET: 'a'.repeat(32) }).CRON_SECRET).toBe('a'.repeat(32))
     }
-  })
-
-  it('rechaza un CRON_SECRET corto', () => {
-    expect(() => parseEnv({ ...valid, CRON_SECRET: 'short' })).toThrowError(/CRON_SECRET/)
   })
 })

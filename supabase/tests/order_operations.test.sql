@@ -1,5 +1,5 @@
 begin;
-select plan(141);
+select plan(152);
 
 -- Owner operations, proof review and expiry (20261106000020_order_operations.sql).
 -- Day for slots: Monday 2099-03-02 in America/Tegucigalpa, one resource, 60-minute service.
@@ -195,6 +195,17 @@ select is((select (total_minor, snapshot ->> 'totalMinor', snapshot ->> 'pending
   '(5000,5000,false,2500)', 'the quoted line and its snapshot carry the price');
 select throws_ok($$select public.set_quoted_price('10000000-0000-0000-0000-00000000000a', pg_temp.oid('quote1'), 5000, 'owner:00000000-0000-0000-0000-0000000000a1')$$,
   'P0001', 'invalid_status', 'a priced order cannot be quoted again');
+select is((select (snapshot ->> 'baseMinor', snapshot ->> 'extrasMinor', snapshot ->> 'dateMinor')::text
+             from order_lines where order_id = pg_temp.oid('quote1') and position = 2),
+  '(5000,0,0)', 'the quoted line has no extras or date amount: base + extras + date = total');
+-- two unpriced lines: one price cannot be split, refused until per-line quoting exists
+select lives_ok($$select public.create_order('10000000-0000-0000-0000-00000000000a', pg_temp.ord('quote5', 'pending_quote', '{"shipping_fee_minor":0,"subtotal_minor":0}'),
+  jsonb_build_array(pg_temp.line('30000000-0000-0000-0000-0000000000a1', 1, 0, pg_temp.snap(0, 'percent', 30, null, true)),
+                    pg_temp.line('30000000-0000-0000-0000-0000000000a1', 1, 0, pg_temp.snap(0, 'percent', 30, null, true))))$$,
+  'pending_quote order with two unpriced lines');
+select throws_ok($$select public.set_quoted_price('10000000-0000-0000-0000-00000000000a', pg_temp.oid('quote5'), 1000, 'owner:00000000-0000-0000-0000-0000000000a1')$$,
+  '22023', null, 'a single price for several unpriced lines is refused');
+select is((select (status, total_minor)::text from orders where id = pg_temp.oid('quote5')), '(pending_quote,)', 'quote5 unchanged');
 
 -- approval shipping: quote first (-> pending_shipping), then the fee
 select lives_ok($$select public.create_order('10000000-0000-0000-0000-00000000000a', pg_temp.ord('quote2', 'pending_quote', '{"subtotal_minor":0}'),
@@ -292,6 +303,14 @@ select lives_ok($$select public.submit_proof('10000000-0000-0000-0000-0000000000
 select is(public.release_booking(pg_temp.oid('pay4')), 1, 'its slot was released');
 select throws_ok($$select public.approve_proof('10000000-0000-0000-0000-00000000000a', pg_temp.oid('pay4'), 'owner:00000000-0000-0000-0000-0000000000a1')$$,
   'P0001', 'holds_released', 'approving an order whose slot went back is refused');
+-- a reservation that is no longer 'held' for any reason (here already committed) also refuses
+select lives_ok($$select public.create_order('10000000-0000-0000-0000-00000000000a', pg_temp.ord('pay5', 'awaiting_deposit'),
+  jsonb_build_array(pg_temp.line('30000000-0000-0000-0000-0000000000a5', 1, 1000, pg_temp.snap(1000, 'percent', 30))))$$, 'pay5');
+select lives_ok($$select public.submit_proof('10000000-0000-0000-0000-00000000000a', pg_temp.oid('pay5'), pg_temp.tok('pay5'), pg_temp.path('pay5'), 'image/png', 10)$$, 'pay5 proof');
+select is(public.commit_stock(pg_temp.oid('pay5')), 1, 'its hold was committed outside the review');
+select throws_ok($$select public.approve_proof('10000000-0000-0000-0000-00000000000a', pg_temp.oid('pay5'), 'owner:00000000-0000-0000-0000-0000000000a1')$$,
+  'P0001', 'holds_released', 'approve refuses unless every hold is still held');
+select is(pg_temp.st('pay5'), 'awaiting_review', 'pay5 unchanged');
 
 -- ---------------------------------------------------------------- reject_proof
 select lives_ok($$select public.create_order('10000000-0000-0000-0000-00000000000a', pg_temp.ord('rej1', 'awaiting_deposit'), pg_temp.std())$$, 'rej1');
@@ -368,23 +387,27 @@ select is(public.set_shipping_fee('10000000-0000-0000-0000-00000000000a', pg_tem
 -- exp9: proof under review for 8 days (the owner must decide)
 select lives_ok($$select public.create_order('10000000-0000-0000-0000-00000000000a', pg_temp.ord('exp9', 'awaiting_deposit'), pg_temp.std())$$, 'exp9');
 select lives_ok($$select public.submit_proof('10000000-0000-0000-0000-00000000000a', pg_temp.oid('exp9'), pg_temp.tok('exp9'), pg_temp.path('exp9'), 'image/png', 10)$$, 'exp9 proof');
+-- exp10: pending_quote nobody quoted for 8 days
+select lives_ok($$select public.create_order('10000000-0000-0000-0000-00000000000a', pg_temp.ord('exp10', 'pending_quote', '{"subtotal_minor":0}'),
+  jsonb_build_array(pg_temp.line('30000000-0000-0000-0000-0000000000a1', 1, 0, pg_temp.snap(0, 'percent', 30, null, true))))$$, 'exp10');
 reset role;
 update orders set hold_expires_at = now() - interval '1 minute' where id in (pg_temp.oid('exp1'), pg_temp.oid('exp6'));
 do $$ begin
   perform pg_temp.age('exp4', 8); perform pg_temp.age('exp5', 8); perform pg_temp.age('exp6', 30);
-  perform pg_temp.age('exp7', 8); perform pg_temp.age('exp8', 8); perform pg_temp.age('exp9', 8);
+  perform pg_temp.age('exp7', 8); perform pg_temp.age('exp8', 8); perform pg_temp.age('exp9', 8); perform pg_temp.age('exp10', 8);
 end $$;
 set local role service_role;
 select is(public.set_quoted_price('10000000-0000-0000-0000-00000000000a', pg_temp.oid('exp5'), 1000, 'owner:00000000-0000-0000-0000-0000000000a1'), 'pending_shipping', 'exp5 quoted today');
 
 select throws_ok($$select public.expire_orders(now(), 0)$$, '22023', null, 'the stale period must be positive');
--- exp1, exp4, exp7 and rej2 (its deadline passed above)
-select is(public.expire_orders(now(), 7), 4, 'four orders expire');
+-- exp1, exp4, exp7, exp10 and rej2 (its deadline passed above)
+select is(public.expire_orders(now(), 7), 5, 'five orders expire');
 select is(pg_temp.st('exp1'), 'cancelled', 'past deadline: cancelled');
 select is(pg_temp.last_event('exp1'), '(awaiting_deposit,cancelled,system,hold_expired)', 'by the system, with the reason');
 select is(pg_temp.stock('30000000-0000-0000-0000-0000000000a4'), 10, 'its stock is back');
 select is((select status from bookings where order_id = pg_temp.oid('exp1')), 'released', 'its slot is free');
 select is(pg_temp.last_event('exp4'), '(pending_shipping,cancelled,system,stale_pending)', 'stuck pending order cancelled');
+select is(pg_temp.last_event('exp10'), '(pending_quote,cancelled,system,stale_pending)', 'stuck pending_quote order cancelled');
 select is(pg_temp.last_event('exp7'), '(awaiting_review,cancelled,system,pay_on_delivery_unconfirmed)', 'ignored pay-on-delivery order cancelled');
 select is((select status from bookings where order_id = pg_temp.oid('exp7')), 'released', 'and its slot freed');
 select is(pg_temp.st('rej2'), 'cancelled', 'the rejected order past its deadline expired');

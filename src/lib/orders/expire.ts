@@ -26,7 +26,22 @@ export function bearerMatches(header: string | null, secret: string | undefined)
   return timingSafeEqual(digest(header ?? ''), digest(`Bearer ${secret}`))
 }
 
+export const CRON_SECRET_MIN_LENGTH = 32
+
+// Deployed environments need a strong secret; without one the cron route fails closed
+// (503) instead of the whole app failing at startup. Locally a missing secret just means
+// every call is refused (401). Never includes the secret's value.
+export function cronSecretProblem(appEnv: 'local' | 'staging' | 'production', secret: string | undefined): string | null {
+  if (appEnv === 'local') return null
+  if (!secret) return `CRON_SECRET is not set (APP_ENV=${appEnv})`
+  if (secret.length < CRON_SECRET_MIN_LENGTH) {
+    return `CRON_SECRET is shorter than ${CRON_SECRET_MIN_LENGTH} characters (APP_ENV=${appEnv})`
+  }
+  return null
+}
+
 export type CronDeps = {
+  appEnv: 'local' | 'staging' | 'production'
   secret: string | undefined
   expire?: (now: Date) => Promise<{ expired: number }>
   now?: () => Date
@@ -40,6 +55,11 @@ const json = (body: unknown, status: number) =>
 
 // Handler of GET /api/cron/expire-orders (Vercel Cron sends the bearer secret).
 export async function handleExpireCron(request: Request, deps: CronDeps): Promise<Response> {
+  const problem = cronSecretProblem(deps.appEnv, deps.secret)
+  if (problem) {
+    console.error(`cron expire-orders refused: ${problem}`)
+    return json({ error: 'cron_not_configured' }, 503)
+  }
   if (!bearerMatches(request.headers.get('authorization'), deps.secret)) {
     return json({ error: 'unauthorized' }, 401)
   }

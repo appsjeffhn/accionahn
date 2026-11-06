@@ -529,6 +529,20 @@ describe('createSupabaseOrderOpsStore', () => {
     await expect(createSupabaseOrderOpsStore(client).approve(TENANT_A, 'o1', 'owner:u')).rejects.toBe(other)
   })
 
+  it('a quote for an order with several unpriced lines (22023) is InvalidOperationError invalid_input', async () => {
+    const { client, calls } = fakeClient({
+      data: null,
+      error: { code: '22023', message: 'one price cannot be split over several unpriced lines' },
+    })
+    await expect(createSupabaseOrderOpsStore(client).setQuotedPrice(TENANT_A, 'o1', 1000, 'owner:u')).rejects.toMatchObject({
+      name: 'InvalidOperationError',
+      code: 'invalid_input',
+    })
+    expect(calls).toEqual([
+      { fn: 'set_quoted_price', args: { p_tenant: TENANT_A, p_order: 'o1', p_price_minor: 1000, p_actor: 'owner:u' } },
+    ])
+  })
+
   it('looks a proof target up by tenant and token', async () => {
     const { client, filters } = fakeClient(
       { data: null, error: null },

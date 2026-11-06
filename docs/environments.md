@@ -57,7 +57,7 @@ Se cargan en Vercel (sección 2) y nunca se escriben en el repositorio.
 | `SUPABASE_SERVICE_ROLE_KEY` | clave service_role de staging | clave service_role de producción |
 | `CRON_SECRET` | secreto propio de staging | secreto propio de producción |
 
-`CRON_SECRET` es obligatorio en staging y producción (la aplicación no arranca sin él): genera uno distinto por entorno, de 32 caracteres o más (por ejemplo con un gestor de contraseñas). Vercel lo envía solo a `/api/cron/expire-orders`, la tarea que cada 15 minutos vence los pedidos sin anticipo y libera existencias y horarios (`vercel.json`). En local es opcional; sin él la ruta responde 401. Ojo: en el plan gratuito (Hobby) de Vercel las tareas programadas solo pueden correr una vez al día; cada 15 minutos requiere el plan Pro.
+`CRON_SECRET` es obligatorio en staging y producción (sin él, o con menos de 32 caracteres, la tarea programada no corre: la ruta responde 503 y deja un error en los registros; el resto de la aplicación sigue funcionando): genera uno distinto por entorno, de 32 caracteres o más (por ejemplo con un gestor de contraseñas). Vercel lo envía solo a `/api/cron/expire-orders`, la tarea que cada 15 minutos vence los pedidos sin anticipo y libera existencias y horarios (`vercel.json`). En local es opcional; sin él la ruta responde 401. Ojo: en el plan gratuito (Hobby) de Vercel las tareas programadas solo pueden correr una vez al día; cada 15 minutos requiere el plan Pro.
 
 Para desarrollo local, copia `.env.example` a `.env.local` (este archivo está ignorado por git) y usa las claves que imprime `supabase start`.
 
