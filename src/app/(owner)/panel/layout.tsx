@@ -1,24 +1,40 @@
 import type { ReactNode } from "react";
-import { headers } from "next/headers";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { requirePanelSession } from "@/lib/auth/panel-session";
-import { TENANT_ID_HEADER } from "@/lib/routing/decide-request";
 import { logout } from "../../login/actions";
+import { panelSession } from "./session";
+import "./panel.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
-  await requirePanelSession((await headers()).get(TENANT_ID_HEADER) ?? "");
-  const t = await getTranslations("login");
+  await panelSession();
+  const [t, tl] = await Promise.all([getTranslations("panel.nav"), getTranslations("login")]);
 
   return (
-    <>
-      <header>
+    <div className="panel">
+      <header className="panel-header">
+        <nav aria-label={t("label")}>
+          <ul>
+            <li>
+              <Link href="/panel">{t("home")}</Link>
+            </li>
+            <li>
+              <Link href="/panel/products">{t("products")}</Link>
+            </li>
+            <li>
+              <Link href="/panel/calendar">{t("calendar")}</Link>
+            </li>
+            <li>
+              <Link href="/panel/settings">{t("settings")}</Link>
+            </li>
+          </ul>
+        </nav>
         <form action={logout}>
-          <button type="submit">{t("logout")}</button>
+          <button type="submit">{tl("logout")}</button>
         </form>
       </header>
       {children}
-    </>
+    </div>
   );
 }
