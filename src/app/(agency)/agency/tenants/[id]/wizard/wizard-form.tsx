@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import { EMPTY_WIZARD_STATE, type WizardState } from "@/lib/agency/wizard-form";
 
-export type WizardState = { errors: Record<string, string> };
 
 export type WizardLabels = {
   fields: Record<string, string>;
@@ -23,7 +23,7 @@ export function WizardForm({
   action: (prev: WizardState, fd: FormData) => Promise<WizardState>;
   labels: WizardLabels;
 }) {
-  const [state, formAction, pending] = useActionState(action, { errors: {} });
+  const [state, formAction, pending] = useActionState(action, EMPTY_WIZARD_STATE);
   const err = (path: string) => {
     const key = state.errors[path];
     if (!key) return null;
@@ -34,6 +34,9 @@ export function WizardForm({
     );
   };
   const f = labels.fields;
+  // React resets uncontrolled fields after an action; re-seed them from what was submitted.
+  const v = (name: string, fallback = "") => state.values[name] ?? fallback;
+  const checked = (name: string) => state.values[name] === "on";
 
   return (
     <form action={formAction}>
@@ -42,27 +45,28 @@ export function WizardForm({
 
       <label>
         {f.name}
-        <input name="companyName" required />
+        <input name="companyName" required defaultValue={v("companyName")} />
       </label>
       {err("companyName")}
 
       <label>
         {f.slug}
-        <input name="slug" required />
+        <input name="slug" required defaultValue={v("slug")} />
       </label>
       {err("slug")}
 
       <label>
         {f.defaultLocale}
-        <select name="defaultLocale" defaultValue="es">
+        <select name="defaultLocale" defaultValue={v("defaultLocale", "es")}>
           <option value="es">Español</option>
           <option value="en">English</option>
         </select>
       </label>
+      {err("defaultLocale")}
 
       <label>
         {f.baseCurrency}
-        <select name="baseCurrency" defaultValue="HNL">
+        <select name="baseCurrency" defaultValue={v("baseCurrency", "HNL")}>
           {labels.currencies.map((c) => (
             <option key={c}>{c}</option>
           ))}
@@ -73,19 +77,25 @@ export function WizardForm({
       {Array.from({ length: labels.extraRows }, (_, i) => (
         <fieldset key={i}>
           <legend>{f.extraCurrency}</legend>
-          <select name={`extraCode${i}`} defaultValue="">
+          <select name={`extraCode${i}`} defaultValue={v(`extraCode${i}`)}>
             <option value="">{f.none}</option>
             {labels.currencies.map((c) => (
               <option key={c}>{c}</option>
             ))}
           </select>
           {err(`extraCurrencies.${i}.code`)}
-          <select name={`extraMode${i}`} defaultValue="manual" aria-label={f.extraMode}>
+          <select
+            name={`extraMode${i}`}
+            defaultValue={v(`extraMode${i}`, "manual")}
+            aria-label={f.extraMode}
+          >
             <option value="manual">{f.modeManual}</option>
             <option value="rate">{f.modeRate}</option>
           </select>
+          {err(`extraCurrencies.${i}.mode`)}
           <input
             name={`extraRate${i}`}
+            defaultValue={v(`extraRate${i}`)}
             type="number"
             step="any"
             min="0"
@@ -98,7 +108,12 @@ export function WizardForm({
 
       <label>
         {f.ownerAlertPhone}
-        <input name="ownerAlertPhone" type="tel" required />
+        <input
+          name="ownerAlertPhone"
+          type="tel"
+          required
+          defaultValue={v("ownerAlertPhone")}
+        />
       </label>
       {err("ownerAlertPhone")}
 
@@ -107,10 +122,14 @@ export function WizardForm({
         {labels.orderFieldKeys.map((k) => (
           <div key={k}>
             <label>
-              <input type="checkbox" name={`field_${k}`} /> {labels.orderKeys[k]}
+              <input type="checkbox" name={`field_${k}`} defaultChecked={checked(`field_${k}`)} /> {labels.orderKeys[k]}
             </label>
             <label>
-              <input type="checkbox" name={`required_${k}`} /> {f.required}
+              <input
+                type="checkbox"
+                name={`required_${k}`}
+                defaultChecked={checked(`required_${k}`)}
+              /> {f.required}
             </label>
           </div>
         ))}
@@ -119,21 +138,36 @@ export function WizardForm({
 
       <label>
         {f.whatsappMode}
-        <select name="whatsappMode" defaultValue="evolution">
+        <select name="whatsappMode" defaultValue={v("whatsappMode", "evolution")}>
           <option value="evolution">Evolution</option>
           <option value="cloud_api">Cloud API</option>
         </select>
       </label>
+      {err("whatsappMode")}
 
       <label>
         {f.aiCapCents}
-        <input name="aiCapCents" type="number" min="0" step="1" placeholder="500" />
+        <input
+          name="aiCapCents"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="500"
+          defaultValue={v("aiCapCents")}
+        />
       </label>
       {err("aiCapCents")}
 
       <label>
         {f.retentionMonths}
-        <input name="retentionMonths" type="number" min="1" step="1" placeholder="12" />
+        <input
+          name="retentionMonths"
+          type="number"
+          min="1"
+          step="1"
+          placeholder="12"
+          defaultValue={v("retentionMonths")}
+        />
       </label>
       {err("retentionMonths")}
 

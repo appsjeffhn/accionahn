@@ -30,10 +30,12 @@ export type TenantConfig = {
 export type WizardStore = {
   // Writes identity/config columns, leaving status 'pending'.
   configure: (tenantId: string, config: TenantConfig) => Promise<void>
-  // Replaces the tenant's subdomain row.
+  // Replaces the tenant's own subdomain row; throws WizardStateError unless the tenant is pending.
   setSubdomain: (tenantId: string, hostname: string) => Promise<void>
-  // pending -> active. Throws WizardStateError if the tenant is not pending.
-  activate: (tenantId: string) => Promise<Tenant>
+  // pending -> active, only while the tenant is still pending AND still has this slug.
+  // Throws WizardStateError otherwise (another run owns the tenant).
+  activate: (tenantId: string, slug: string) => Promise<Tenant>
+  // Deletes the row only while the tenant is pending; a no-op for an active tenant.
   removeSubdomain: (tenantId: string, hostname: string) => Promise<void>
 }
 
@@ -74,8 +76,10 @@ export async function completeWizard(
   await store.setSubdomain(tenantId, hostname)
   try {
     // Last write: the tenant only becomes reachable once its host row exists.
-    return await store.activate(tenantId)
+    return await store.activate(tenantId, input.slug)
   } catch (error) {
+    // Another run owns the tenant (it may be live): never touch its domain.
+    if (error instanceof WizardStateError) throw error
     try {
       await store.removeSubdomain(tenantId, hostname)
     } catch (cleanupError) {

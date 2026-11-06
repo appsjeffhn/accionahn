@@ -1,4 +1,4 @@
-import { ORDER_FIELD_KEYS } from './wizard-schema'
+import { ORDER_FIELD_KEYS, wizardInputSchema, type WizardInput } from './wizard-schema'
 
 export const EXTRA_CURRENCY_ROWS = 2
 
@@ -42,4 +42,46 @@ export function wizardFormToInput(fd: FormData): Record<string, unknown> {
     aiCapCents: num(fd, 'aiCapCents'),
     retentionMonths: num(fd, 'retentionMonths'),
   }
+}
+
+export type WizardState = {
+  // Schema/form path (e.g. "slug", "extraCurrencies.1.rate") -> error key without the "wizard.errors." prefix.
+  errors: Record<string, string>
+  // Raw submitted values by input name, used to repopulate the form after an error.
+  values: Record<string, string>
+}
+
+export const EMPTY_WIZARD_STATE: WizardState = { errors: {}, values: {} }
+
+const errorKey = (message: string) => message.replace(/^wizard\.errors\./, '')
+
+// Original form row index of each extra currency that reached the schema.
+function extraRowIndexes(fd: FormData): number[] {
+  const rows: number[] = []
+  for (let i = 0; i < EXTRA_CURRENCY_ROWS; i++) if (text(fd, `extraCode${i}`)) rows.push(i)
+  return rows
+}
+
+export function submittedValues(fd: FormData): Record<string, string> {
+  const values: Record<string, string> = {}
+  for (const [k, v] of fd.entries()) if (typeof v === 'string') values[k] = v
+  return values
+}
+
+export type WizardFormResult =
+  | { ok: true; data: WizardInput }
+  | { ok: false; state: WizardState }
+
+export function validateWizardForm(fd: FormData): WizardFormResult {
+  const parsed = wizardInputSchema.safeParse(wizardFormToInput(fd))
+  if (parsed.success) return { ok: true, data: parsed.data }
+  const rows = extraRowIndexes(fd)
+  const errors: Record<string, string> = {}
+  for (const issue of parsed.error.issues) {
+    const path = issue.path.map((p, i, all) =>
+      all[0] === 'extraCurrencies' && i === 1 ? (rows[p as number] ?? p) : p,
+    )
+    errors[path.join('.') || '_form'] ??= errorKey(issue.message)
+  }
+  return { ok: false, state: { errors, values: submittedValues(fd) } }
 }

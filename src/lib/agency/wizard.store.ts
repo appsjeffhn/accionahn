@@ -4,6 +4,7 @@ import { createServiceClient } from './requests.store'
 import { SlugTakenError, WizardStateError, type WizardStore } from './wizard'
 
 const UNIQUE_VIOLATION = '23505'
+const NOT_PENDING = 'WZ001'
 
 const TENANT_COLUMNS =
   'id, slug, name, status, cohort, default_locale, base_currency, enabled_currencies'
@@ -47,26 +48,23 @@ export function createSupabaseWizardStore(
       if (data?.length !== 1) throw new WizardStateError(tenantId)
     },
     async setSubdomain(tenantId, hostname) {
-      const del = await supabase
-        .from('tenant_domains')
-        .delete()
-        .eq('tenant_id', tenantId)
-        .eq('kind', 'subdomain')
-      if (del.error) throw del.error
-      const { error } = await supabase
-        .from('tenant_domains')
-        .insert({ hostname, tenant_id: tenantId, kind: 'subdomain' })
+      const { error } = await supabase.rpc('wizard_set_subdomain', {
+        p_tenant_id: tenantId,
+        p_hostname: hostname,
+      })
       if (error) {
+        if (error.code === NOT_PENDING) throw new WizardStateError(tenantId)
         if (error.code === UNIQUE_VIOLATION) throw new SlugTakenError(hostname)
         throw error
       }
     },
-    async activate(tenantId) {
+    async activate(tenantId, slug) {
       const { data, error } = await supabase
         .from('tenants')
         .update({ status: 'active' })
         .eq('id', tenantId)
         .eq('status', 'pending')
+        .eq('slug', slug)
         .select(TENANT_COLUMNS)
       if (error) throw error
       const r = data?.[0] as
@@ -89,11 +87,10 @@ export function createSupabaseWizardStore(
       }
     },
     async removeSubdomain(tenantId, hostname) {
-      const { error } = await supabase
-        .from('tenant_domains')
-        .delete()
-        .eq('tenant_id', tenantId)
-        .eq('hostname', hostname)
+      const { error } = await supabase.rpc('wizard_remove_subdomain', {
+        p_tenant_id: tenantId,
+        p_hostname: hostname,
+      })
       if (error) throw error
     },
   }
