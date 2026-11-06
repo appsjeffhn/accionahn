@@ -48,11 +48,39 @@
       "name": "Store name",
       "slug": "Web address",
       "defaultLocale": "Default language",
-      "baseCurrency": "Base currency"
+      "baseCurrency": "Base currency",
+      "extraCurrency": "Extra currency",
+      "extraMode": "Pricing",
+      "modeManual": "Manual price",
+      "modeRate": "Exchange rate",
+      "rate": "Exchange rate (1 extra = X base)",
+      "ownerAlertPhone": "Owner phone for alerts (+504...)",
+      "orderFields": "Order details",
+      "required": "Required",
+      "whatsappMode": "WhatsApp mode",
+      "aiCapCents": "Monthly AI cap (cents)",
+      "retentionMonths": "Retention (months)",
+      "none": "None"
     },
     "errors": {
       "required": "This field is required.",
-      "slugTaken": "That address is already in use."
+      "slugTaken": "That address is already in use.",
+      "invalid": "Invalid value.",
+      "slugInvalid": "Use 3 to 40 lowercase letters, digits or hyphens, with no leading or trailing hyphen.",
+      "slugReserved": "That address is reserved.",
+      "currencyInvalid": "Unsupported currency.",
+      "currencyDuplicate": "Repeated currency or same as the base.",
+      "rateInvalid": "Enter an exchange rate greater than 0.",
+      "phoneInvalid": "Use international format, for example +50499999999.",
+      "notPending": "This store was already set up."
+    },
+    "orderKeys": {
+      "place": "Place",
+      "date": "Date",
+      "time": "Time",
+      "address": "Address",
+      "deposit": "Deposit",
+      "shipping_cost": "Shipping cost"
     }
   }
 }

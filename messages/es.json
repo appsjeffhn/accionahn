@@ -48,11 +48,39 @@
       "name": "Nombre de la tienda",
       "slug": "Dirección web",
       "defaultLocale": "Idioma por defecto",
-      "baseCurrency": "Moneda base"
+      "baseCurrency": "Moneda base",
+      "extraCurrency": "Moneda extra",
+      "extraMode": "Precio",
+      "modeManual": "Precio manual",
+      "modeRate": "Tipo de cambio",
+      "rate": "Tipo de cambio (1 extra = X base)",
+      "ownerAlertPhone": "Teléfono del dueño para avisos (+504...)",
+      "orderFields": "Datos del pedido",
+      "required": "Obligatorio",
+      "whatsappMode": "Modo de WhatsApp",
+      "aiCapCents": "Tope mensual de IA (centavos)",
+      "retentionMonths": "Retención (meses)",
+      "none": "Ninguna"
     },
     "errors": {
       "required": "Este campo es obligatorio.",
-      "slugTaken": "Esa dirección ya está en uso."
+      "slugTaken": "Esa dirección ya está en uso.",
+      "invalid": "Valor no válido.",
+      "slugInvalid": "Usa 3 a 40 letras minúsculas, números o guiones, sin guion al inicio ni al final.",
+      "slugReserved": "Esa dirección está reservada.",
+      "currencyInvalid": "Moneda no soportada.",
+      "currencyDuplicate": "Moneda repetida o igual a la base.",
+      "rateInvalid": "Ingresa un tipo de cambio mayor que 0.",
+      "phoneInvalid": "Usa el formato internacional, por ejemplo +50499999999.",
+      "notPending": "Esta tienda ya fue configurada."
+    },
+    "orderKeys": {
+      "place": "Lugar",
+      "date": "Fecha",
+      "time": "Hora",
+      "address": "Dirección",
+      "deposit": "Depósito",
+      "shipping_cost": "Costo de envío"
     }
   }
 }
