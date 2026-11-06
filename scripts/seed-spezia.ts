@@ -16,7 +16,7 @@ export const SPEZIA_INPUT = wizardInputSchema.parse({
   defaultLocale: 'es',
   baseCurrency: 'HNL',
   extraCurrencies: [{ code: 'USD', mode: 'rate', rate: 25 }],
-  // Fake number: the real owner alert phone is set from the agency panel.
+  // Fake number: the real owner alert phone is set afterwards (docs/environments.md, step 5).
   ownerAlertPhone: '+50400000000',
   orderFields: ['place', 'date', 'time', 'address', 'deposit'].map((key) => ({ key, required: true })),
   whatsappMode: 'evolution',

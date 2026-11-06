@@ -69,7 +69,15 @@ Hay dos caminos. En local y staging se usa el script de semilla, que además cre
 2. Ejecuta `pnpm seed:spezia`.
 3. El script crea el cliente `spezia` (cohorte `pilot`, moneda base HNL, USD a tasa 25, dominio `spezia.<ROOT_DOMAIN>`; en staging será `spezia.staging.accionahn.com`) y el administrador. Volver a ejecutarlo no duplica nada.
 4. Para el administrador de **producción**, el script no se usa: créalo a mano en el panel de Supabase del proyecto de producción (**Authentication > Users > Add user**, con *Auto Confirm User*) y luego, en **SQL Editor**, ejecuta `insert into public.agency_admins (user_id) select id from auth.users where email = '<correo>';`. Hazlo tú; no compartas la contraseña con nadie.
-5. Cambia el número de alerta del dueño de Spezia (el script usa uno falso, `+50400000000`) desde el panel de la agencia.
+5. Cambia el número de alerta del dueño de Spezia: el script usa uno falso (`+50400000000`). Por ahora el panel de la agencia no tiene un editor de ajustes para una tienda ya activa (llega en un plan posterior), así que el cambio se hace en el **SQL Editor** de Supabase del proyecto que corresponda. Reemplaza `<telefono-e164>` por el número real en formato E.164 (por ejemplo `+504` seguido de 8 dígitos) y `<slug>` por el subdominio de la tienda (`spezia`):
+
+   ```sql
+   update public.tenants
+   set settings = jsonb_set(settings, '{ownerAlertPhone}', to_jsonb('<telefono-e164>'::text))
+   where slug = '<slug>';
+   ```
+
+   Debe decir `UPDATE 1`. Esto cambia solo el número de alerta; el resto de los ajustes de la tienda queda igual.
 
 ## Qué hace cada quien
 
