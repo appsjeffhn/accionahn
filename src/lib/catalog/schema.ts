@@ -108,7 +108,7 @@ export const productInputSchema = z
     }
   })
 
-const isoDate = z
+export const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, E('date'))
   .refine((s) => {
