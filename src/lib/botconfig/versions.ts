@@ -58,6 +58,9 @@ export async function publish(
   await store.publish(tenantId, version)
 }
 
+// Republishes the version published most recently before the current one, so calling
+// it repeatedly toggles between the two most recent publications. Returns null (and
+// changes nothing) when nothing is published or there is no previous publication.
 export async function rollback(
   tenantId: string,
   deps: BotConfigDeps = {},

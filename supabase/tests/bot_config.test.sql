@@ -1,5 +1,5 @@
 begin;
-select plan(31);
+select plan(44);
 
 insert into auth.users (id, instance_id, aud, role, email) values
   ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@test.local'),
@@ -81,6 +81,28 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*) from bot_config_versions), 4::bigint, 'admin reads all versions');
 select lives_ok($$insert into bot_config_versions (tenant_id, version, config) values ('10000000-0000-0000-0000-00000000000a', 50, '{}')$$, 'admin can insert a draft');
+select throws_ok($$update bot_config_versions set status = 'published' where tenant_id = '10000000-0000-0000-0000-00000000000b'$$, '42501', null, 'admin cannot set status directly');
+delete from bot_config_versions where tenant_id = '10000000-0000-0000-0000-00000000000a' and version in (1, 2);
+select lives_ok($$update bot_config_versions set config = '{"admin":"edit"}' where tenant_id = '10000000-0000-0000-0000-00000000000a' and version = 3$$, 'admin can edit a draft config');
+select throws_ok($$update bot_config_versions set config = '{"admin":"edit"}' where tenant_id = '10000000-0000-0000-0000-00000000000a' and version = 2$$, '55000', null, 'admin edit of a published config is rejected');
+reset role;
+select is((select string_agg(version || ':' || status, ',' order by version) from bot_config_versions where tenant_id = '10000000-0000-0000-0000-00000000000a' and version <= 3), '1:archived,2:published,3:draft', 'admin delete removed no published or archived row');
+select is((select config->>'admin' from bot_config_versions where tenant_id = '10000000-0000-0000-0000-00000000000a' and version = 3), 'edit', 'admin draft edit persisted');
+
+-- production path: the service role runs the RPCs end to end (tenant C, fresh history)
+insert into tenants (id, slug, name, status) values ('10000000-0000-0000-0000-00000000000c', 'tenant-c', 'Tenant C', 'active');
+set local role service_role;
+select is(public.create_bot_config_draft('10000000-0000-0000-0000-00000000000c', '{"n":1}'), 1, 'service_role creates draft 1');
+select is(public.create_bot_config_draft('10000000-0000-0000-0000-00000000000c', '{"n":2}'), 2, 'service_role creates draft 2');
+select is(public.create_bot_config_draft('10000000-0000-0000-0000-00000000000c', '{"n":3}'), 3, 'service_role creates draft 3');
+select lives_ok($$select public.publish_bot_config('10000000-0000-0000-0000-00000000000c', 1)$$, 'service_role publishes 1');
+select lives_ok($$select public.publish_bot_config('10000000-0000-0000-0000-00000000000c', 2)$$, 'service_role publishes 2');
+select lives_ok($$select public.publish_bot_config('10000000-0000-0000-0000-00000000000c', 3)$$, 'service_role publishes 3');
+-- documented semantics: previous = most recently published before the current one,
+-- so repeated rollback toggles between the two most recent publications
+select is(public.rollback_bot_config('10000000-0000-0000-0000-00000000000c'), 2, 'rollback after 1,2,3 gives 2');
+select is(public.rollback_bot_config('10000000-0000-0000-0000-00000000000c'), 3, 'second rollback gives 3');
+reset role;
 
 select * from finish();
 rollback;
