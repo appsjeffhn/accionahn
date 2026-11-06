@@ -79,6 +79,11 @@ describe('canAccess', () => {
     expect(canAccess('/agency/tenants', admin, null)).toBe(true)
     expect(canAccess('/agency', owner, 'A')).toBe(false)
   })
+  it('denies /agency on a tenant host even for an agency admin', () => {
+    expect(canAccess('/agency', admin, 'A')).toBe(false)
+    expect(canAccess('/agency/requests', admin, 'A')).toBe(false)
+    expect(canAccess('/panel/../agency', admin, 'A')).toBe(false)
+  })
   it('denies anonymous on both', () => {
     expect(canAccess('/panel', null, 'A')).toBe(false)
     expect(canAccess('/agency', null, null)).toBe(false)
