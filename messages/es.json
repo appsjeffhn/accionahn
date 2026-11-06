@@ -1,5 +1,7 @@
 {
-  "app": { "name": "Accionahn" },
+  "app": {
+    "name": "Accionahn"
+  },
   "login": {
     "title": "Iniciar sesión",
     "email": "Correo electrónico",
@@ -17,7 +19,22 @@
       "active": "Activa",
       "suspended": "Suspendida"
     },
-    "empty": "Aún no hay tiendas."
+    "empty": "Aún no hay tiendas.",
+    "requests": {
+      "title": "Solicitudes de clientes",
+      "empty": "No hay solicitudes.",
+      "business": "Negocio",
+      "email": "Correo",
+      "country": "País",
+      "statusLabel": "Estado",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "status": {
+        "pending": "Pendiente",
+        "approved": "Aprobada",
+        "rejected": "Rechazada"
+      }
+    }
   },
   "wizard": {
     "title": "Crear tienda",

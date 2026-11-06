@@ -1,5 +1,7 @@
 {
-  "app": { "name": "Accionahn" },
+  "app": {
+    "name": "Accionahn"
+  },
   "login": {
     "title": "Sign in",
     "email": "Email",
@@ -17,7 +19,22 @@
       "active": "Active",
       "suspended": "Suspended"
     },
-    "empty": "There are no stores yet."
+    "empty": "There are no stores yet.",
+    "requests": {
+      "title": "Client requests",
+      "empty": "There are no requests.",
+      "business": "Business",
+      "email": "Email",
+      "country": "Country",
+      "statusLabel": "Status",
+      "approve": "Approve",
+      "reject": "Reject",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      }
+    }
   },
   "wizard": {
     "title": "Create store",
