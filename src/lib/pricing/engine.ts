@@ -4,6 +4,7 @@ import type {
   CartLine,
   ConfigurableDef,
   DateRule,
+  Deposit,
   OptionDef,
   PricedProduct,
   Quote,
@@ -50,6 +51,23 @@ function optionExtras(
 
 function findTier(cfg: ConfigurableDef, people: number) {
   return cfg.tiers.find((t) => people >= t.minPeople && people <= t.maxPeople)
+}
+
+// Deposit of one line from its definition: percent of the line total (half up), a fixed
+// amount capped at the line total, the whole line, or nothing. fixedTargetMinor is the
+// fixed deposit already converted to the order currency. The SQL order_line_deposit
+// (20261106000020_order_operations.sql) applies the same rule when an order is repriced.
+export function lineDepositMinor(totalMinor: number, deposit: Deposit, fixedTargetMinor: number): number {
+  switch (deposit.kind) {
+    case 'percent':
+      return percentOf(totalMinor, deposit.value)
+    case 'fixed':
+      return Math.min(totalMinor, fixedTargetMinor)
+    case 'full':
+      return totalMinor
+    default:
+      return 0
+  }
 }
 
 export function computeQuote(input: QuoteInput): Quote {
@@ -122,15 +140,11 @@ export function computeQuote(input: QuoteInput): Quote {
     }
 
     const totalMinor = baseMinor + extrasMinor + dateMinor
-    const { kind, value } = product.deposit
-    const deposit =
-      kind === 'percent'
-        ? percentOf(totalMinor, value)
-        : kind === 'fixed'
-          ? Math.min(totalMinor, toTarget(value))
-          : kind === 'full'
-            ? totalMinor
-            : 0
+    const deposit = lineDepositMinor(
+      totalMinor,
+      product.deposit,
+      product.deposit.kind === 'fixed' ? toTarget(product.deposit.value) : 0,
+    )
     return { kind: 'ok', line: { lineId: line.lineId, baseMinor, extrasMinor, dateMinor, totalMinor, depositMinor: deposit } }
   }
 

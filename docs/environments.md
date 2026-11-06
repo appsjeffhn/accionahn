@@ -55,8 +55,19 @@ Se cargan en Vercel (sección 2) y nunca se escriben en el repositorio.
 | `SUPABASE_URL` | URL del proyecto staging | URL del proyecto producción |
 | `SUPABASE_ANON_KEY` | clave anon de staging | clave anon de producción |
 | `SUPABASE_SERVICE_ROLE_KEY` | clave service_role de staging | clave service_role de producción |
+| `CRON_SECRET` | secreto propio de staging | secreto propio de producción |
+
+`CRON_SECRET` es obligatorio en staging y producción (la aplicación no arranca sin él): genera uno distinto por entorno, de 32 caracteres o más (por ejemplo con un gestor de contraseñas). Vercel lo envía solo a `/api/cron/expire-orders`, la tarea que cada 15 minutos vence los pedidos sin anticipo y libera existencias y horarios (`vercel.json`). En local es opcional; sin él la ruta responde 401. Ojo: en el plan gratuito (Hobby) de Vercel las tareas programadas solo pueden correr una vez al día; cada 15 minutos requiere el plan Pro.
 
 Para desarrollo local, copia `.env.example` a `.env.local` (este archivo está ignorado por git) y usa las claves que imprime `supabase start`.
+
+### Almacenamiento de comprobantes (staging y producción)
+
+Supabase Storage no corre en local, así que se crea y se prueba a mano en cada proyecto:
+
+1. En Supabase: **Storage > New bucket**, nombre `order-proofs`, **privado** (sin acceso público), límite de 5 MB, tipos permitidos `image/jpeg, image/png, image/webp, application/pdf`.
+2. No agregues políticas para `anon` ni `authenticated`: la aplicación sube y firma enlaces con la clave service_role, y cada archivo queda en `<tenant_id>/<order_id>/<uuid>`.
+3. Prueba en staging: haz un pedido con anticipo, sube un comprobante desde el enlace del pedido y comprueba que aparece en el bucket y que el panel lo abre con un enlace firmado.
 
 ## 5. Crear el primer administrador de la agencia
 

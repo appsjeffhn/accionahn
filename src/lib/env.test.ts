@@ -22,4 +22,20 @@ describe('parseEnv', () => {
   it('devuelve el entorno con valores validos', () => {
     expect(parseEnv(valid).ROOT_DOMAIN).toBe('accionahn.com')
   })
+
+  it('CRON_SECRET es opcional en local', () => {
+    expect(parseEnv(valid).CRON_SECRET).toBeUndefined()
+    expect(parseEnv({ ...valid, CRON_SECRET: '' }).CRON_SECRET).toBeUndefined()
+  })
+
+  it('CRON_SECRET es obligatorio en staging y produccion', () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(() => parseEnv({ ...valid, APP_ENV })).toThrowError(/CRON_SECRET/)
+      expect(parseEnv({ ...valid, APP_ENV, CRON_SECRET: 'a'.repeat(32) }).CRON_SECRET).toBe('a'.repeat(32))
+    }
+  })
+
+  it('rechaza un CRON_SECRET corto', () => {
+    expect(() => parseEnv({ ...valid, CRON_SECRET: 'short' })).toThrowError(/CRON_SECRET/)
+  })
 })
