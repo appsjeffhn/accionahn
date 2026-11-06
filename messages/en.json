@@ -37,6 +37,20 @@
         "approving": "Approving..."
       },
       "retryApprove": "Retry approval"
+    },
+    "releases": {
+      "title": "Releases",
+      "empty": "No flags yet.",
+      "key": "Flag",
+      "rollout": "Rollout",
+      "apply": "Apply",
+      "newKey": "New flag key",
+      "create": "Create flag",
+      "options": {
+        "off": "Off",
+        "pilot": "Pilot",
+        "all": "Everyone"
+      }
     }
   },
   "wizard": {

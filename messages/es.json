@@ -37,6 +37,20 @@
         "approving": "Aprobando..."
       },
       "retryApprove": "Reintentar aprobación"
+    },
+    "releases": {
+      "title": "Liberaciones",
+      "empty": "Aún no hay flags.",
+      "key": "Flag",
+      "rollout": "Alcance",
+      "apply": "Aplicar",
+      "newKey": "Clave del nuevo flag",
+      "create": "Crear flag",
+      "options": {
+        "off": "Apagado",
+        "pilot": "Piloto",
+        "all": "Todos"
+      }
     }
   },
   "wizard": {
