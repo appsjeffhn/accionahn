@@ -2,48 +2,29 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { runGate } from '@/lib/auth/gate'
 import { createUserClient, readSession } from '@/lib/auth/session'
 import { parseEnv } from '@/lib/env'
-import { TENANT_LOCALE_HEADER } from '@/lib/i18n/config'
+import { decideRequest } from '@/lib/routing/decide-request'
 import { lookupTenantByHostname } from '@/lib/tenancy/lookup'
-import { normalizeHost, resolveTenant } from '@/lib/tenancy/resolve'
 
-export const TENANT_ID_HEADER = 'x-tenant-id'
-export const TENANT_SLUG_HEADER = 'x-tenant-slug'
-
-function gate(
-  request: NextRequest,
-  headers: Headers,
-  hostTenantId: string | null,
-): Promise<NextResponse> {
-  return runGate({
-    request,
-    headers,
-    hostTenantId,
-    loadSession: (cookies) => readSession(createUserClient(cookies)),
-  })
-}
+export { TENANT_ID_HEADER, TENANT_SLUG_HEADER } from '@/lib/routing/decide-request'
 
 export async function middleware(request: NextRequest) {
-  const headers = new Headers(request.headers)
-  headers.delete(TENANT_ID_HEADER)
-  headers.delete(TENANT_SLUG_HEADER)
-  headers.delete(TENANT_LOCALE_HEADER)
-
-  const host = request.headers.get('host') ?? ''
   const { ROOT_DOMAIN } = parseEnv(process.env)
-
-  if (normalizeHost(host) === `app.${ROOT_DOMAIN.toLowerCase()}`) {
-    return gate(request, headers, null)
-  }
-
-  const tenant = await resolveTenant(host, lookupTenantByHostname)
-  if (!tenant || tenant.status !== 'active') {
+  const decision = await decideRequest({
+    host: request.headers.get('host') ?? '',
+    path: request.nextUrl.pathname,
+    incomingHeaders: request.headers,
+    rootDomain: ROOT_DOMAIN,
+    lookup: lookupTenantByHostname,
+  })
+  if (decision.action === 'notFound') {
     return new NextResponse('Not found', { status: 404 })
   }
-
-  headers.set(TENANT_ID_HEADER, tenant.id)
-  headers.set(TENANT_SLUG_HEADER, tenant.slug)
-  headers.set(TENANT_LOCALE_HEADER, tenant.defaultLocale)
-  return gate(request, headers, tenant.id)
+  return runGate({
+    request,
+    headers: decision.headers,
+    hostTenantId: decision.hostTenantId,
+    loadSession: (cookies) => readSession(createUserClient(cookies)),
+  })
 }
 
 export const config = {
