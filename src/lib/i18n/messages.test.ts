@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import en from '../../../messages/en.json'
 import es from '../../../messages/es.json'
+import { ORDER_STATUSES } from '../orders/states'
+import { INPUT_FIELD_KEYS, NOTES_KEY, STORE_ERROR_KEYS } from '../store/checkout'
 
 function keys(obj: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(obj).flatMap(([k, v]) =>
@@ -33,6 +35,22 @@ describe('message catalogs', () => {
     expect(used.size).toBeGreaterThan(30)
     const errors = (es as { catalog: { errors: Record<string, string> } }).catalog.errors
     expect([...used].filter((k) => !(k in errors))).toEqual([])
+  })
+
+  it('have a store.errors message for every key the storefront can show', () => {
+    for (const catalog of [es, en] as { store: { errors: Record<string, string> } }[]) {
+      const missing = [...STORE_ERROR_KEYS, 'checkFields'].filter((k) => !(k in catalog.store.errors))
+      expect(missing).toEqual([])
+    }
+  })
+
+  it('label every order status and every customer order field in the store', () => {
+    const store = (es as unknown as { store: { order: { status: object; statusHelp: object }; fields: object } }).store
+    for (const s of ORDER_STATUSES) {
+      expect(store.order.status).toHaveProperty(s)
+      expect(store.order.statusHelp).toHaveProperty(s)
+    }
+    for (const k of [...INPUT_FIELD_KEYS, NOTES_KEY]) expect(store.fields).toHaveProperty(k)
   })
 
   it('contain the login, agency and wizard namespaces', () => {

@@ -15,8 +15,9 @@ import { isoDate } from '../catalog/schema'
 import type { PublicCatalog } from '../catalog/catalog'
 import { ProofRejectedError } from '../orders/operations'
 import { canonicalPhone, InvalidOrderError, QuoteRejectedError, TooManyPendingOrdersError } from '../orders/orders'
-import type { ConfigurableDef, PersonTier } from '../pricing/types'
+import type { ConfigurableDef } from '../pricing/types'
 import { InsufficientStockError } from '../stock/stock'
+import { optionsProblem, tierFor } from './taqueada'
 
 // Boundary of the storefront's server actions: every form is parsed here with fixed
 // bounds before anything reaches the catalog, the engine or createOrder. Prices or totals
@@ -90,22 +91,6 @@ export function parseAddToCartForm(fd: FormData): { ok: true; value: AddToCartIn
       includedToppings: d.topping.length,
     },
   }
-}
-
-// The tier a group falls in; a group above the last tier (to be quoted) uses the last one.
-export function tierFor(cfg: ConfigurableDef, people: number): PersonTier | undefined {
-  const tier = cfg.tiers.find((t) => people >= t.minPeople && people <= t.maxPeople)
-  if (tier) return tier
-  const last = [...cfg.tiers].sort((a, b) => b.maxPeople - a.maxPeople)[0]
-  return last && people > last.maxPeople ? last : undefined
-}
-
-function optionsProblem(selected: string[], included: number, defs: { id: string }[], tierIncluded: number): string | null {
-  if (included < tierIncluded) return 'too_few_options'
-  if (included > tierIncluded) return 'too_many_included'
-  if (new Set(selected).size !== selected.length) return 'duplicate_option'
-  if (selected.some((id) => !defs.some((d) => d.id === id))) return 'unknown_option'
-  return null
 }
 
 export type BuildResult = { ok: true; item: CartItem } | { ok: false; code: string }
@@ -325,5 +310,5 @@ export const STORE_ERROR_KEYS = [
   'productUnavailable', 'variantRequired', 'slot', 'invalid', 'failed', 'throttled',
   'too_few_options', 'too_many_included', 'unknown_option', 'invalid_people', 'duplicate_option',
   'required', 'tooLong', 'phone', 'date', 'time',
-  'notAwaiting', 'expired', 'tooLarge', 'fileType', 'noFile',
+  'notAwaiting', 'expired', 'tooLarge', 'fileType', 'noFile', 'emptyCart', 'cartChanged',
 ] as const
