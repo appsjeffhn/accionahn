@@ -12,6 +12,7 @@ import {
   type Cart,
 } from "@/lib/cart/cart";
 import { listPublicCatalog, type PublicCatalog } from "@/lib/catalog/catalog";
+import { parseEnv } from "@/lib/env";
 import { readStoreSettings } from "@/lib/orders/orders";
 import { TENANT_ID_HEADER } from "@/lib/routing/decide-request";
 import { loadStorefront, type Storefront } from "@/lib/store/storefront";
@@ -23,6 +24,8 @@ export type StoreContext = Storefront & {
   locale: StoreLocale;
   catalog: PublicCatalog;
   settings: ReturnType<typeof readStoreSettings>;
+  // Origin of the project's Supabase Storage, for public URLs of tenant-assets.
+  storageUrl: string;
 };
 
 // Tenant id from the middleware's header only. On the agency host (no tenant) and for a
@@ -47,6 +50,7 @@ export const storeContext = cache(async (): Promise<StoreContext> => {
     locale: locale === "en" ? "en" : "es",
     catalog,
     settings: readStoreSettings(catalog.settings),
+    storageUrl: parseEnv(process.env).SUPABASE_URL,
   };
 });
 

@@ -35,13 +35,15 @@
       "products": "Productos",
       "calendar": "Calendario",
       "settings": "Ajustes",
-      "orders": "Pedidos"
+      "orders": "Pedidos",
+      "appearance": "Apariencia"
     },
     "home": {
       "products": "Crea y edita productos, precios, variantes y existencias.",
       "calendar": "Equipos, horarios de atención y días cerrados para productos con reserva.",
       "settings": "Envío, pagos por transferencia, recargos por fecha y zona horaria.",
-      "orders": "Revisa pagos, pon costos de envío y precios, confirma o cancela pedidos."
+      "orders": "Revisa pagos, pon costos de envío y precios, confirma o cancela pedidos.",
+      "appearance": "Colores, letra, logo y textos de bienvenida de tu tienda."
     },
     "form": {
       "fixFields": "Revisa los campos marcados.",
@@ -353,6 +355,52 @@
         "customer": "cliente",
         "system": "automático"
       }
+    },
+    "appearance": {
+      "title": "Apariencia de la tienda",
+      "intro": "Elige los colores, la letra, el logo y los textos que ven tus clientes. Antes de guardar revisamos que los textos se lean bien.",
+      "save": "Guardar apariencia",
+      "colors": "Colores",
+      "colorsHint": "El texto debe contrastar al menos 4.5 a 1 con el fondo; el color principal y el de acento, al menos 3 a 1.",
+      "color": {
+        "background": "Fondo",
+        "text": "Texto",
+        "primary": "Color principal",
+        "accent": "Color de acento"
+      },
+      "colorHint": {
+        "background": "Fondo de todas las páginas de la tienda.",
+        "text": "Color de los textos.",
+        "primary": "Fondo de los botones. La letra del botón se elige sola (blanca o negra) para que se lea.",
+        "accent": "Enlaces, bordes destacados y el marco que indica dónde está el teclado."
+      },
+      "font": "Letra",
+      "fonts": {
+        "sans": "Moderna (sin remates)",
+        "serif": "Clásica (con remates)",
+        "rounded": "Redondeada"
+      },
+      "texts": "Textos de bienvenida",
+      "headingEs": "Título de la página principal (español)",
+      "headingEn": "Título de la página principal (inglés)",
+      "taglineEs": "Frase debajo del título (español)",
+      "taglineEn": "Frase debajo del título (inglés)",
+      "textHint": "Opcional, hasta {max} caracteres. Si falta un idioma se muestra el otro; si faltan ambos, se muestra el nombre de la tienda.",
+      "logo": "Logo",
+      "logoFile": "Subir un logo nuevo",
+      "logoHint": "PNG, JPG o WebP de hasta 1 MB. Se muestra en el encabezado de la tienda en lugar del nombre.",
+      "currentLogo": "Logo actual de la tienda",
+      "removeLogo": "Quitar el logo actual",
+      "noLogo": "Todavía no hay logo: la tienda muestra su nombre.",
+      "previewTitle": "Vista previa",
+      "previewStoreName": "Tu tienda",
+      "previewLink": "Así se ve un enlace",
+      "previewButton": "Agregar al carrito",
+      "checkText": "Texto sobre fondo: {ratio} a 1 (mínimo {min}).",
+      "checkPrimary": "Color principal sobre fondo: {ratio} a 1 (mínimo {min}).",
+      "checkAccent": "Acento sobre fondo: {ratio} a 1 (mínimo {min}).",
+      "checkPass": "Cumple.",
+      "checkFail": "No cumple."
     }
   },
   "agency": {
@@ -518,7 +566,16 @@
       "holdsReleased": "No se puede confirmar: el plazo de pago venció y el producto o el horario ya se liberaron. Si el cliente pagó tarde, crea el pedido de nuevo o devuélvele el dinero.",
       "orderNotFound": "Este pedido ya no existe.",
       "noProof": "No hay un comprobante por revisar.",
-      "orderState": "El pedido cambió mientras lo veías. Recarga la página."
+      "orderState": "El pedido cambió mientras lo veías. Recarga la página.",
+      "themeColor": "Elige un color válido (formato #rrggbb).",
+      "themeFont": "Elige una de las letras de la lista.",
+      "themeText": "Usa como máximo el largo indicado, en una sola línea y sin los signos < ni >.",
+      "contrastText": "El texto no se lee bien sobre el fondo: el contraste debe ser al menos 4.5 a 1. Oscurece el texto o aclara el fondo (o al revés).",
+      "contrastPrimary": "El color principal se confunde con el fondo: el contraste debe ser al menos 3 a 1.",
+      "contrastAccent": "El color de acento se confunde con el fondo: el contraste debe ser al menos 3 a 1.",
+      "logoPath": "El logo guardado no es válido. Sube el logo de nuevo.",
+      "logoType": "El logo debe ser una imagen PNG, JPG o WebP.",
+      "logoSize": "El logo pesa más de 1 MB. Usa una imagen más liviana."
     }
   },
   "store": {

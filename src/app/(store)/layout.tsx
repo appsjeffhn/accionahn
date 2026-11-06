@@ -10,8 +10,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: { default: tenant.name, template: `%s · ${tenant.name}` } };
 }
 
-// Store pages of a tenant host. The tenant theme (Task 11) is passed to StoreShell as
-// CSS variables; until then the defaults of store.css apply.
+// Store pages of a tenant host. StoreShell applies the tenant theme (CSS variables, logo)
+// itself, so `/` (src/app/page.tsx), which renders StoreShell outside this group, gets it too.
 export default function StoreLayout({ children }: { children: ReactNode }) {
   return <StoreShell>{children}</StoreShell>;
 }

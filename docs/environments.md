@@ -69,6 +69,21 @@ Supabase Storage no corre en local, así que se crea y se prueba a mano en cada 
 2. No agregues políticas para `anon` ni `authenticated`: la aplicación sube y firma enlaces con la clave service_role, y cada archivo queda en `<tenant_id>/<order_id>/<uuid>`.
 3. Prueba en staging: haz un pedido con anticipo, sube un comprobante desde el enlace del pedido y comprueba que aparece en el bucket y que el panel lo abre con un enlace firmado.
 
+(El bucket privado de comprobantes se llama `order-proofs` en el código, `ORDER_PROOFS_BUCKET`; en algunos documentos del plan aparece como "payment-proofs": es el mismo.)
+
+### Logos e imágenes de las tiendas (staging y producción)
+
+El logo que el dueño sube en **Panel > Apariencia** se guarda en un bucket **público**, porque la tienda lo muestra a cualquier visitante:
+
+1. En Supabase: **Storage > New bucket**, nombre `tenant-assets`, marca **Public bucket**, límite de 1 MB, tipos permitidos `image/png, image/jpeg, image/webp` (sin SVG: puede llevar código).
+2. No agregues políticas de escritura para `anon` ni `authenticated`: la aplicación sube con la clave service_role después de comprobar la sesión del dueño. Cada archivo queda en `<tenant_id>/logo-<uuid>.<png|jpg|webp>`.
+3. La tienda solo muestra imágenes (logo y fotos de productos) que estén bajo la carpeta de su propia tienda en este bucket: una ruta `<tenant_id>/...` o una URL `https://<proyecto>.supabase.co/storage/v1/object/public/tenant-assets/<tenant_id>/...` del mismo proyecto (`SUPABASE_URL`). Cualquier otra dirección de imagen no se muestra.
+4. Prueba en staging (a mano, Storage no corre en local):
+   - Entra al panel de una tienda de prueba, abre **Apariencia**, sube un PNG de menos de 1 MB y guarda. Comprueba que aparece `tenant-assets/<tenant_id>/logo-<uuid>.png` en el bucket y que el encabezado de la tienda muestra el logo (texto alternativo: el nombre de la tienda).
+   - Intenta subir un SVG y un archivo de más de 1 MB: ambos deben dar error y no crear archivos.
+   - Cambia el texto a un color claro sobre fondo claro: debe dar error de contraste y no guardar.
+   - Abre la URL pública del logo en el navegador sin sesión: debe verse (bucket público).
+
 ### Invitación del dueño y acceso al panel (staging y producción, Solo la persona dueña)
 
 El administrador de la agencia invita al dueño de una tienda **activa** desde **Panel de agencia > Invitar al dueño** (página de la tienda). Supabase le envía un correo; el enlace abre `https://<subdominio>/auth/callback` en la tienda, donde el dueño crea su contraseña y entra a `/panel`. Después entra con correo y contraseña en `https://<subdominio>/login`. La agencia entra en `https://app.<dominio>/login`.

@@ -31,6 +31,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             <li>
               <Link href="/panel/settings">{t("settings")}</Link>
             </li>
+            <li>
+              <Link href="/panel/appearance">{t("appearance")}</Link>
+            </li>
           </ul>
         </nav>
         <form action={logout}>

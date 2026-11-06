@@ -224,6 +224,42 @@ describe('catalog reads', () => {
 
   it('listPublicCatalog copes with a tenant that has no settings yet', async () => {
     const { store } = makeStore()
-    expect((await listPublicCatalog('A', { store })).settings).toBeNull()
+    const out = await listPublicCatalog('A', { store })
+    expect(out.settings).toBeNull()
+    expect(out.theme).toBeNull()
+  })
+
+  it('listPublicCatalog returns only the validated theme, never the raw jsonb', async () => {
+    const T = '55555555-5555-4555-8555-555555555555'
+    const OTHER = '66666666-6666-4666-8666-666666666666'
+    const LOGO = '77777777-7777-4777-8777-777777777777'
+    const theme = {
+      primary: '#A63D16',
+      accent: '#1d6b35',
+      background: '#fffaf4',
+      text: '#1f1a17',
+      font: 'sans',
+      heading: { es: 'Hola' },
+      tagline: {},
+      logoPath: `${OTHER}/logo-${LOGO}.png`,
+      injected: '</style><script>x</script>',
+    }
+    const { store } = makeStore({}, { ...full, settings: { ...full.settings, theme } })
+    const out = await listPublicCatalog(T, { store })
+    expect(out.settings).not.toHaveProperty('theme')
+    expect(out.theme).toEqual({
+      primary: '#a63d16',
+      accent: '#1d6b35',
+      background: '#fffaf4',
+      text: '#1f1a17',
+      font: 'sans',
+      heading: { es: 'Hola' },
+      tagline: {},
+    })
+    expect(JSON.stringify(out)).not.toContain('script')
+    expect(JSON.stringify(out)).not.toContain('SINPE')
+
+    const bad = makeStore({}, { ...full, settings: { ...full.settings, theme: { ...theme, text: '#fffaf4' } } })
+    expect((await listPublicCatalog(T, { store: bad.store })).theme).toBeNull()
   })
 })

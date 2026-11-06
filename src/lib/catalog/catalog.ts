@@ -1,4 +1,5 @@
 import { ForbiddenError, type Session } from '../auth/session'
+import { readStoredTheme, type Theme } from '../store/theme'
 import {
   productInputSchema,
   storeSettingsInputSchema,
@@ -24,7 +25,10 @@ export type PublicCatalog = {
   variants: (Row & { inStock: boolean })[]
   dateRules: Row[]
   zones: Row[]
+  // Without payment_instructions and without the raw theme.
   settings: Row | null
+  // The validated theme (themeSchema), or null to use the store defaults.
+  theme: Theme | null
 }
 
 export type CatalogStore = {
@@ -66,7 +70,9 @@ function omit(row: Row, keys: string[]): Row {
 }
 
 // Storefront view: active items only, `inStock` instead of stock counts, no SKUs and no
-// payment instructions. Needs no session.
+// payment instructions. The theme jsonb is never passed through as stored: only the
+// result of readStoredTheme (validated, logo limited to this tenant's prefix). Needs no
+// session.
 export async function listPublicCatalog(
   tenantId: string,
   deps: CatalogDeps = {},
@@ -82,10 +88,12 @@ export async function listPublicCatalog(
       return { ...rest, inStock: stock === null || stock === undefined || Number(stock) > 0 }
     })
   let settings: Row | null = null
+  let theme: Theme | null = null
   if (all.settings) {
-    settings = omit(all.settings, ['payment_instructions'])
+    settings = omit(all.settings, ['payment_instructions', 'theme'])
+    theme = readStoredTheme(all.settings.theme, tenantId)
   }
-  return { products, variants, dateRules: all.dateRules, zones: all.zones, settings }
+  return { products, variants, dateRules: all.dateRules, zones: all.zones, settings, theme }
 }
 
 export async function saveProduct(

@@ -21,6 +21,7 @@ describe('message catalogs', () => {
     const sources = [
       'src/lib/catalog/schema.ts',
       'src/lib/store/schema.ts',
+      'src/lib/store/theme.ts',
       'src/lib/catalog/form.ts',
       'src/app/(owner)/panel/session.ts',
       'src/app/(owner)/panel/products/actions.ts',
@@ -35,6 +36,12 @@ describe('message catalogs', () => {
     expect(used.size).toBeGreaterThan(30)
     const errors = (es as { catalog: { errors: Record<string, string> } }).catalog.errors
     expect([...used].filter((k) => !(k in errors))).toEqual([])
+  })
+
+  it('have a catalog.errors message for every logo upload error', () => {
+    for (const catalog of [es, en] as { catalog: { errors: Record<string, string> } }[]) {
+      expect(['logoType', 'logoSize', 'logoPath'].filter((k) => !(k in catalog.catalog.errors))).toEqual([])
+    }
   })
 
   it('have a store.errors message for every key the storefront can show', () => {

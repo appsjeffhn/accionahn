@@ -35,13 +35,15 @@
       "products": "Products",
       "calendar": "Calendar",
       "settings": "Settings",
-      "orders": "Orders"
+      "orders": "Orders",
+      "appearance": "Appearance"
     },
     "home": {
       "products": "Create and edit products, prices, variants and stock.",
       "calendar": "Teams, opening hours and closed days for bookable products.",
       "settings": "Shipping, bank transfer payments, date surcharges and time zone.",
-      "orders": "Review payments, set shipping fees and prices, confirm or cancel orders."
+      "orders": "Review payments, set shipping fees and prices, confirm or cancel orders.",
+      "appearance": "Colors, font, logo and welcome texts of your store."
     },
     "form": {
       "fixFields": "Please check the marked fields.",
@@ -353,6 +355,52 @@
         "customer": "customer",
         "system": "automatic"
       }
+    },
+    "appearance": {
+      "title": "Store appearance",
+      "intro": "Choose the colors, font, logo and texts your customers see. Before saving we check that texts are readable.",
+      "save": "Save appearance",
+      "colors": "Colors",
+      "colorsHint": "Text must contrast at least 4.5 to 1 with the background; the main and accent colors at least 3 to 1.",
+      "color": {
+        "background": "Background",
+        "text": "Text",
+        "primary": "Main color",
+        "accent": "Accent color"
+      },
+      "colorHint": {
+        "background": "Background of every store page.",
+        "text": "Color of the texts.",
+        "primary": "Button background. The button label is picked automatically (white or black) so it stays readable.",
+        "accent": "Links, highlighted borders and the keyboard focus ring."
+      },
+      "font": "Font",
+      "fonts": {
+        "sans": "Modern (sans serif)",
+        "serif": "Classic (serif)",
+        "rounded": "Rounded"
+      },
+      "texts": "Welcome texts",
+      "headingEs": "Home page title (Spanish)",
+      "headingEn": "Home page title (English)",
+      "taglineEs": "Line under the title (Spanish)",
+      "taglineEn": "Line under the title (English)",
+      "textHint": "Optional, up to {max} characters. If one language is missing the other is shown; if both are, the store name is shown.",
+      "logo": "Logo",
+      "logoFile": "Upload a new logo",
+      "logoHint": "PNG, JPG or WebP up to 1 MB. Shown in the store header instead of the name.",
+      "currentLogo": "Current store logo",
+      "removeLogo": "Remove the current logo",
+      "noLogo": "No logo yet: the store shows its name.",
+      "previewTitle": "Preview",
+      "previewStoreName": "Your store",
+      "previewLink": "This is how a link looks",
+      "previewButton": "Add to cart",
+      "checkText": "Text on background: {ratio} to 1 (minimum {min}).",
+      "checkPrimary": "Main color on background: {ratio} to 1 (minimum {min}).",
+      "checkAccent": "Accent on background: {ratio} to 1 (minimum {min}).",
+      "checkPass": "Passes.",
+      "checkFail": "Fails."
     }
   },
   "agency": {
@@ -518,7 +566,16 @@
       "holdsReleased": "It cannot be confirmed: the payment deadline passed and the product or time slot was already released. If the customer paid late, create the order again or refund them.",
       "orderNotFound": "This order no longer exists.",
       "noProof": "There is no proof to review.",
-      "orderState": "The order changed while you were viewing it. Reload the page."
+      "orderState": "The order changed while you were viewing it. Reload the page.",
+      "themeColor": "Choose a valid color (#rrggbb format).",
+      "themeFont": "Choose one of the fonts in the list.",
+      "themeText": "Keep within the length shown, on one line and without the < or > signs.",
+      "contrastText": "The text is hard to read on the background: contrast must be at least 4.5 to 1. Darken the text or lighten the background (or the other way round).",
+      "contrastPrimary": "The main color blends into the background: contrast must be at least 3 to 1.",
+      "contrastAccent": "The accent color blends into the background: contrast must be at least 3 to 1.",
+      "logoPath": "The saved logo is not valid. Upload the logo again.",
+      "logoType": "The logo must be a PNG, JPG or WebP image.",
+      "logoSize": "The logo is larger than 1 MB. Use a lighter image."
     }
   },
   "store": {

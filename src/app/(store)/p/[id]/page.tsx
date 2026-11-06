@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { listAvailableSlots, type Slot } from "@/lib/calendar/calendar";
 import { formatMoney } from "@/lib/pricing/money";
 import type { ConfigurableDef, Deposit } from "@/lib/pricing/types";
+import { resolveImageSource } from "@/lib/store/assets";
 import { addDays, dayParam, formatDay, formatTime, isUuid, localized, todayIn } from "@/lib/store/view";
 import { addToCartAction } from "../../actions";
 import { storeContext } from "../../store-context";
@@ -40,7 +41,8 @@ export default async function ProductPage({
   const money = (minor: number) => formatMoney(minor, tenant.baseCurrency, locale);
   const name = localized(product.name, locale) || t("unnamed");
   const description = localized(product.description, locale);
-  const images = (Array.isArray(product.images) ? product.images : []).filter((u): u is string => typeof u === "string");
+  // Only images under this tenant's Storage prefix are rendered; others are left out.
+  const image = Array.isArray(product.images) ? resolveImageSource(ctx.tenantId, product.images[0], ctx.storageUrl) : null;
   const variants = catalog.variants.filter((v) => v.product_id === id);
   const configurable = product.kind === "configurable" ? (product.configurable as ConfigurableDef | null) : null;
 
@@ -53,9 +55,9 @@ export default async function ProductPage({
   return (
     <article className="store-product">
       <h1>{name}</h1>
-      {images[0] && (
-        // eslint-disable-next-line @next/next/no-img-element -- owner-supplied URLs on any host; next/image needs each host allowlisted
-        <img src={images[0]} alt="" />
+      {image && (
+        // eslint-disable-next-line @next/next/no-img-element -- only the tenant's own Storage images (resolveImageSource); next/image would need the host allowlisted per project
+        <img src={image} alt="" />
       )}
       {description && <p>{description}</p>}
 

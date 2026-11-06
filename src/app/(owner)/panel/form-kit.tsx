@@ -122,6 +122,8 @@ type FieldProps = {
   max?: string;
   step?: string;
   autoComplete?: string;
+  // File inputs only.
+  accept?: string;
 };
 
 export function Field({ name, label, hint, errorName, type = "text", required, ...rest }: FieldProps) {

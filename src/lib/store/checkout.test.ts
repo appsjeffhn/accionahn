@@ -44,6 +44,7 @@ const catalog: PublicCatalog = {
   dateRules: [],
   zones: [{ id: ZONE, fee_minor: 100 }],
   settings: { shipping_mode: 'zones', per_line_date: false, timezone: 'America/Tegucigalpa' },
+  theme: null,
 }
 
 function form(entries: [string, string][]): FormData {
