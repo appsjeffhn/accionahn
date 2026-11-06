@@ -20,6 +20,19 @@
       "suspended": "Suspendida"
     },
     "empty": "Aún no hay tiendas.",
+    "name": "Nombre",
+    "slug": "Subdominio",
+    "statusLabel": "Estado",
+    "cohortLabel": "Cohorte",
+    "cohort": {
+      "pilot": "Piloto",
+      "general": "General"
+    },
+    "configure": "Configurar",
+    "nav": {
+      "requests": "Solicitudes de clientes",
+      "releases": "Liberaciones"
+    },
     "requests": {
       "title": "Solicitudes de clientes",
       "empty": "No hay solicitudes.",
@@ -36,7 +49,8 @@
         "approvedNoTenant": "Aprobada sin tienda",
         "approving": "Aprobando..."
       },
-      "retryApprove": "Reintentar aprobación"
+      "retryApprove": "Reintentar aprobación",
+      "configure": "Configurar tienda"
     },
     "releases": {
       "title": "Liberaciones",

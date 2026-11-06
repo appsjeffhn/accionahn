@@ -1,4 +1,5 @@
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getSession, requireRole } from "@/lib/auth/session";
 import {
@@ -103,6 +104,11 @@ export default async function RequestsPage() {
                           <button type="submit">{t("reject")}</button>
                         </form>
                       </>
+                    )}
+                    {r.status === "approved" && r.tenant_id !== null && (
+                      <Link href={`/agency/tenants/${r.tenant_id}/wizard`}>
+                        {t("configure")}
+                      </Link>
                     )}
                   </td>
                 </tr>
