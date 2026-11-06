@@ -77,7 +77,7 @@ const variantSchema = z.object({
   id: z.uuid(),
   label: text,
   sku: z.string().trim().max(64).nullish(),
-  // null: stock is not tracked
+  // null: stock is not tracked. Only used when the variant is created; later changes go through adjustStock
   stock: z.number({ error: E('stock') }).int(E('stock')).min(0, E('stock')).nullable().optional(),
   active: z.boolean(),
 })
