@@ -68,12 +68,31 @@ const lineSchema = z.object({
   resourceId: z.uuid().optional(),
 })
 
-// Stored normalized: optional +, then 7 to 15 digits.
+// Calling code added to 8-digit local numbers. Honduras first; should become a per-tenant setting.
+export const DEFAULT_CALLING_CODE = '504'
+
+// Canonical E.164-like form (+ and 8 to 15 digits) so one phone counts once for the abuse
+// limit however it is typed. 8 digits = local number; 9 to 15 digits = already includes
+// the country code; anything else is ambiguous and refused (null).
+export function canonicalPhone(raw: string): string | null {
+  const s = raw.replace(/[\s().-]/g, '')
+  if (/^\d{8}$/.test(s)) return `+${DEFAULT_CALLING_CODE}${s}`
+  if (/^\d{9,15}$/.test(s)) return `+${s}`
+  if (/^\+\d{8,15}$/.test(s)) return s
+  return null
+}
+
 const phoneSchema = z
   .string()
   .max(40)
-  .transform((s) => s.replace(/[\s().-]/g, ''))
-  .pipe(z.string().regex(/^\+?\d{7,15}$/))
+  .transform((s, ctx) => {
+    const phone = canonicalPhone(s)
+    if (phone === null) {
+      ctx.addIssue({ code: 'custom', message: 'invalid phone' })
+      return z.NEVER
+    }
+    return phone
+  })
 
 export const createOrderInputSchema = z.object({
   lines: z
@@ -343,9 +362,9 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
 
   const rate = currency === tenant.baseCurrency ? null : (rates[currency] ?? null)
   const lines: OrderLineWrite[] = planned.map(({ line, product, variant, start, resourceId }, i) => {
+    // amounts and deposit as allocated by the engine for the whole order (a fixed date
+    // surcharge sits on one line only); depositMinor is null only for a pending_quote line
     const amounts = quote.lines[i]
-    // the engine prices the line alone (no shipping) to give this line's deposit
-    const alone = computeQuote({ ...quoteInput, lines: [cartLines[i]], shipping: { ...shipping, mode: 'none' }, zoneId: undefined })
     const deposit = product.deposit as Deposit
     return {
       productId: line.productId,
@@ -372,9 +391,9 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
         extrasMinor: amounts.extrasMinor,
         dateMinor: amounts.dateMinor,
         totalMinor: amounts.totalMinor,
-        pendingQuote: alone.status === 'pending_quote',
+        pendingQuote: amounts.depositMinor === null,
         deposit,
-        depositMinor: alone.depositDueMinor,
+        depositMinor: amounts.depositMinor,
         depositFixedMinor:
           deposit.kind !== 'fixed' ? null : rate === null ? deposit.value : convertMinor(deposit.value, rate),
       },

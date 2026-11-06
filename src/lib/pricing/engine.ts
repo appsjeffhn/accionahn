@@ -15,7 +15,7 @@ import type {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 type LineResult =
-  | { kind: 'ok'; line: QuoteLine; deposit: number }
+  | { kind: 'ok'; line: QuoteLine }
   | { kind: 'pending_quote'; line: QuoteLine }
   | { kind: 'error'; line: QuoteLine; codes: string[] }
 
@@ -68,7 +68,12 @@ export function computeQuote(input: QuoteInput): Quote {
     return convertMinor(baseMinor, rate)
   }
 
-  const zero = (lineId: string): QuoteLine => ({ lineId, baseMinor: 0, extrasMinor: 0, dateMinor: 0, totalMinor: 0 })
+  const zero = (lineId: string): QuoteLine => ({
+    lineId, baseMinor: 0, extrasMinor: 0, dateMinor: 0, totalMinor: 0, depositMinor: null,
+  })
+  // Lines without their own date share the order date: FIXED rules of that date are charged
+  // once per order, on the first such line that can be priced. Percent rules stay per line.
+  let orderFixedCharged = false
 
   const priceLine = (line: CartLine): LineResult => {
     const fail = (...codes: string[]): LineResult => ({ kind: 'error', line: zero(line.lineId), codes })
@@ -101,14 +106,18 @@ export function computeQuote(input: QuoteInput): Quote {
       baseMinor = fixed !== undefined ? fixed * line.qty : toTarget(product.priceMinor * line.qty)
     }
 
+    const ownDate = line.date !== undefined
     const date = line.date ?? input.orderDate
     let dateMinor = 0
     if (date !== undefined) {
       const weekday = weekdayOf(date)
       if (weekday === null) return fail('invalid_date')
+      const chargeFixed = ownDate || !orderFixedCharged
+      if (!ownDate) orderFixedCharged = true
       for (const rule of input.dateRules) {
         if (!matches(rule, date, weekday)) continue
-        dateMinor += rule.kind === 'percent' ? percentOf(baseMinor + extrasMinor, rule.value) : toTarget(rule.value)
+        if (rule.kind === 'percent') dateMinor += percentOf(baseMinor + extrasMinor, rule.value)
+        else if (chargeFixed) dateMinor += toTarget(rule.value)
       }
     }
 
@@ -122,7 +131,7 @@ export function computeQuote(input: QuoteInput): Quote {
           : kind === 'full'
             ? totalMinor
             : 0
-    return { kind: 'ok', line: { lineId: line.lineId, baseMinor, extrasMinor, dateMinor, totalMinor }, deposit }
+    return { kind: 'ok', line: { lineId: line.lineId, baseMinor, extrasMinor, dateMinor, totalMinor, depositMinor: deposit } }
   }
 
   const results = input.lines.map(priceLine)
@@ -161,7 +170,7 @@ export function computeQuote(input: QuoteInput): Quote {
   }
 
   const totalMinor = subtotalMinor + shippingMinor
-  const linesDeposit = results.reduce((s, r) => s + (r.kind === 'ok' ? r.deposit : 0), 0)
+  const linesDeposit = results.reduce((s, r) => s + (r.line.depositMinor ?? 0), 0)
   const depositDueMinor = linesDeposit + (shipping.prepay ? shippingMinor : 0)
   return {
     status,

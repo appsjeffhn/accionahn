@@ -6,7 +6,9 @@ import type { CatalogStore, StoreCatalog } from '../catalog/catalog'
 import { InsufficientStockError } from '../stock/stock'
 import type { Tenant } from '../tenancy/resolve'
 import {
+  DEFAULT_CALLING_CODE,
   InvalidOrderError,
+  canonicalPhone,
   QuoteRejectedError,
   TooManyPendingOrdersError,
   createOrder,
@@ -142,7 +144,10 @@ function world(cat: StoreCatalog = catalog()) {
       timezone: 'America/Tegucigalpa',
       calendar: { prepMinutes: 0, serviceMinutes: 60, bufferMinutes: 0, dailyLimit: null, slotStepMinutes: 30, minNoticeHours: 0, maxDaysAhead: 36500 },
       resources: [{ id: R1, services: [] }],
-      hours: [{ resourceId: null, weekday: 1, opens: '08:00:00', closes: '20:00:00' }],
+      hours: [
+        { resourceId: null, weekday: 1, opens: '08:00:00', closes: '20:00:00' },
+        { resourceId: null, weekday: 6, opens: '08:00:00', closes: '20:00:00' },
+      ],
       closed: [],
       bookings: state.bookings.map((b) => ({
         resourceId: b.resourceId, productId: b.productId, start: new Date(b.start).toISOString(), end: new Date(b.end).toISOString(),
@@ -374,6 +379,32 @@ describe('createOrder: stock and slots, all or nothing', () => {
     expect(state.bookings.map((b) => new Date(b.start).toISOString())).toEqual([at('10:00')])
   })
 
+  it('one order date: a fixed date surcharge is charged once per order, deposit included', async () => {
+    const saturdayFee = { id: 'sat', kind: 'fixed', value: 5000, weekdays: [6], dates: [] }
+    const { state, deps } = world(catalog({}, [saturdayFee]))
+    // Saturday 2099-03-07, 10:00 local
+    const start = new Date('2099-03-07T10:00:00-06:00').toISOString()
+    const r = await createOrder(TENANT, {
+      ...pickles,
+      start,
+      lines: [
+        { lineId: 'jar', productId: P_PICKLE, variantId: V_JAR, qty: 2 },
+        { lineId: 'cake', productId: P_CAKE, qty: 1 },
+      ],
+    }, deps)
+    const o = state.orders[0]
+    expect(o.lines.map((l) => l.snapshot.dateMinor)).toEqual([5000, 0])
+    // jar 20000 + 5000 surcharge, cake 50000, shipping 15000
+    expect(r.quote.totalMinor).toBe(90000)
+    expect(o.totalMinor).toBe(90000)
+    expect(o.subtotalMinor).toBe(75000)
+    // jar: 30% of 25000 (it carries the surcharge); cake: fixed 10000
+    expect(o.lines.map((l) => l.snapshot.depositMinor)).toEqual([7500, 10000])
+    expect(o.depositDueMinor).toBe(17500)
+    expect(o.depositDueMinor).toBe(o.lines.reduce((s, l) => s + (l.snapshot.depositMinor ?? 0), 0))
+    expect(o.dueOnDeliveryMinor).toBe(72500)
+  })
+
   it('per_line_date: two reservable lines in different slots create two bookings', async () => {
     const { state, deps } = world(catalog({ per_line_date: true }))
     await createOrder(TENANT, {
@@ -435,6 +466,26 @@ describe('createOrder: abuse limit and token', () => {
     await expect(
       createOrder(TENANT, { ...pickles, lines: [{ ...pickles.lines[0], qty: 1 }], customer: { name: 'Otro', phone: '+50433333333' } }, deps),
     ).resolves.toBeDefined()
+  })
+
+  it('phones are canonicalized before the limit: local 8-digit numbers get +504', async () => {
+    const { state, deps } = world()
+    const one = { ...pickles, lines: [{ ...pickles.lines[0], qty: 1 }] }
+    for (const phone of ['50499990000', '9999-0000', '+504 9999 0000']) {
+      await createOrder(TENANT, { ...one, customer: { name: 'Ana', phone } }, deps)
+    }
+    expect(state.orders.map((o) => o.customerPhone)).toEqual(['+50499990000', '+50499990000', '+50499990000'])
+    await expect(createOrder(TENANT, { ...one, customer: { name: 'Ana', phone: '(9999) 0000' } }, deps))
+      .rejects.toBeInstanceOf(TooManyPendingOrdersError)
+  })
+
+  it('canonicalPhone keeps international numbers and refuses ambiguous ones', () => {
+    expect(canonicalPhone('+1 (415) 555-0100')).toBe('+14155550100')
+    expect(canonicalPhone('14155550100')).toBe('+14155550100')
+    expect(canonicalPhone('99990000')).toBe(`+${DEFAULT_CALLING_CODE}99990000`)
+    for (const bad of ['12', '1234567', '+1234567', '99990000x', '+5049999000012345']) {
+      expect(canonicalPhone(bad), bad).toBeNull()
+    }
   })
 
   it('the public token is 32 random bytes in base64url, generated per order', async () => {

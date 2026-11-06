@@ -132,6 +132,48 @@ describe('computeQuote date rules', () => {
     expect(q.lines[0].dateMinor).toBe(0)
   })
 
+  const fixedSat = { id: 'sat', kind: 'fixed' as const, value: 5000, weekdays: [6] }
+  const mesaLine = { lineId: 'b', productId: 'mesa', qty: 1 }
+
+  it('one order date: a fixed rule is charged once per order, on the first priced line', () => {
+    const q = computeQuote(input({ lines: [taqLine, mesaLine], dateRules: [fixedSat], orderDate: '2026-11-07' }))
+    expect(q.lines.map((l) => l.dateMinor)).toEqual([5000, 0])
+    expect(q.totalMinor).toBe(450000 + 5000 + 100000)
+    // deposits (30% each) follow the same allocation
+    expect(q.lines.map((l) => l.depositMinor)).toEqual([136500, 30000])
+    expect(q.depositDueMinor).toBe(166500)
+  })
+
+  it('one order date: a line that cannot be priced yet does not swallow the fixed surcharge', () => {
+    const q = computeQuote(
+      input({ lines: [{ ...taqLine, people: 35 }, mesaLine], dateRules: [fixedSat], orderDate: '2026-11-07' }),
+    )
+    expect(q.lines.map((l) => l.dateMinor)).toEqual([0, 5000])
+    expect(q.lines.map((l) => l.depositMinor)).toEqual([null, 31500])
+  })
+
+  it('per-line dates: each line keeps its own fixed surcharge', () => {
+    const q = computeQuote(
+      input({
+        lines: [{ ...taqLine, date: '2026-11-07' }, { ...mesaLine, date: '2026-11-07' }],
+        dateRules: [fixedSat],
+      }),
+    )
+    expect(q.lines.map((l) => l.dateMinor)).toEqual([5000, 5000])
+    expect(q.totalMinor).toBe(450000 + 100000 + 10000)
+  })
+
+  it('one order date: percent rules stay per line', () => {
+    const q = computeQuote(
+      input({
+        lines: [taqLine, mesaLine],
+        dateRules: [{ id: 'p', kind: 'percent', value: 10, weekdays: [6] }],
+        orderDate: '2026-11-07',
+      }),
+    )
+    expect(q.lines.map((l) => l.dateMinor)).toEqual([45000, 10000])
+  })
+
   it('errors with invalid_date on a malformed date', () => {
     const q = computeQuote(input({ lines: [{ lineId: 'a', productId: 'mesa', qty: 1, date: '07/11/2026' }] }))
     expect(q.errors).toContainEqual({ lineId: 'a', code: 'invalid_date' })

@@ -79,6 +79,8 @@ export interface QuoteLine {
   extrasMinor: number
   dateMinor: number
   totalMinor: number
+  // this line's deposit; null when the line cannot be priced (error or pending_quote)
+  depositMinor: number | null
 }
 
 export interface QuoteError {
