@@ -102,7 +102,7 @@ export async function getSession(): Promise<Session | null> {
       try {
         list.forEach(({ name, value, options }) => store.set(name, value, options))
       } catch {
-        // Server Components cannot set cookies; the middleware refreshes them.
+        // Server Components cannot set cookies; on protected paths the middleware persists refreshed tokens.
       }
     },
   })

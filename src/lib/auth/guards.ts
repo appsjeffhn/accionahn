@@ -1,7 +1,28 @@
 import type { Session } from './session'
 
-function isUnder(path: string, prefix: string): boolean {
-  return path === prefix || path.startsWith(`${prefix}/`)
+type Area = 'agency' | 'panel'
+
+// Returns the protected area a path belongs to; null for public paths.
+// A path that cannot be decoded is treated as the strictest area so it is denied.
+function areaOf(path: string): Area | null | 'invalid' {
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(path)
+  } catch {
+    return 'invalid'
+  }
+  const segments: string[] = []
+  for (const part of decoded.toLowerCase().split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') segments.pop()
+    else segments.push(part)
+  }
+  const first = segments[0]
+  return first === 'agency' || first === 'panel' ? first : null
+}
+
+export function requiresAuth(path: string): boolean {
+  return areaOf(path) !== null
 }
 
 export function canAccess(
@@ -9,13 +30,13 @@ export function canAccess(
   session: Session | null,
   hostTenantId: string | null,
 ): boolean {
-  if (isUnder(path, '/agency')) return session?.role === 'agency_admin'
-  if (isUnder(path, '/panel')) {
-    return (
-      session?.role === 'business_owner' &&
-      hostTenantId !== null &&
-      session.tenantId === hostTenantId
-    )
-  }
-  return true
+  const area = areaOf(path)
+  if (area === null) return true
+  if (area === 'invalid') return false
+  if (area === 'agency') return session?.role === 'agency_admin'
+  return (
+    session?.role === 'business_owner' &&
+    hostTenantId !== null &&
+    session.tenantId === hostTenantId
+  )
 }

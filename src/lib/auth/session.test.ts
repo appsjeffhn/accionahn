@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ForbiddenError, deriveSession, requireRole, type Session } from './session'
-import { canAccess } from './guards'
+import { canAccess, requiresAuth } from './guards'
 
 const active = { tenantId: 't1', tenantStatus: 'active' as const }
 
@@ -87,5 +87,46 @@ describe('canAccess', () => {
     expect(canAccess('/panelx', null, null)).toBe(true)
     expect(canAccess('/agency-info', null, null)).toBe(true)
     expect(canAccess('/', null, null)).toBe(true)
+  })
+})
+
+describe('path normalization', () => {
+  const admin: Session = { userId: 'a', role: 'agency_admin', tenantId: null }
+  const owner: Session = { userId: 'u', role: 'business_owner', tenantId: 'A' }
+  const protectedPaths = [
+    '/Panel',
+    '/PANEL/x',
+    '/%70anel',
+    '/panel%2Fbot',
+    '//panel',
+    '/panel/../agency',
+    '/panel/',
+    '/agency/',
+  ]
+
+  it.each(protectedPaths)('%s requires auth and denies anonymous', (path) => {
+    expect(requiresAuth(path)).toBe(true)
+    expect(canAccess(path, null, 'A')).toBe(false)
+    expect(canAccess(path, null, null)).toBe(false)
+  })
+
+  it.each(['/panelx', '/agency-info', '/'])('%s does not require auth', (path) => {
+    expect(requiresAuth(path)).toBe(false)
+  })
+
+  it('treats a malformed escape as protected and denied', () => {
+    expect(requiresAuth('/%E0%A4%A')).toBe(true)
+    expect(canAccess('/%E0%A4%A', admin, null)).toBe(false)
+    expect(canAccess('/%E0%A4%A', owner, 'A')).toBe(false)
+  })
+
+  it('applies the agency rule to /panel/../agency', () => {
+    expect(canAccess('/panel/../agency', admin, null)).toBe(true)
+    expect(canAccess('/panel/../agency', owner, 'A')).toBe(false)
+  })
+
+  it('applies the panel rule to normalized variants', () => {
+    expect(canAccess('/PANEL/', owner, 'A')).toBe(true)
+    expect(canAccess('//panel', owner, 'B')).toBe(false)
   })
 })
