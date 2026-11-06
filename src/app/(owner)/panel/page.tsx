@@ -10,7 +10,7 @@ export default async function PanelHomePage() {
       <h1>{t("title")}</h1>
       <p>{t("welcome")}</p>
       <ul className="cards">
-        {(["products", "calendar", "settings"] as const).map((key) => (
+        {(["orders", "products", "calendar", "settings"] as const).map((key) => (
           <li key={key} className="card">
             <h2>
               <Link href={`/panel/${key}`}>{t(`nav.${key}`)}</Link>

@@ -34,12 +34,14 @@
       "home": "Inicio",
       "products": "Productos",
       "calendar": "Calendario",
-      "settings": "Ajustes"
+      "settings": "Ajustes",
+      "orders": "Pedidos"
     },
     "home": {
       "products": "Crea y edita productos, precios, variantes y existencias.",
       "calendar": "Equipos, horarios de atención y días cerrados para productos con reserva.",
-      "settings": "Envío, pagos por transferencia, recargos por fecha y zona horaria."
+      "settings": "Envío, pagos por transferencia, recargos por fecha y zona horaria.",
+      "orders": "Revisa pagos, pon costos de envío y precios, confirma o cancela pedidos."
     },
     "form": {
       "fixFields": "Revisa los campos marcados.",
@@ -250,6 +252,106 @@
       "addClosed": "Agregar día cerrado",
       "day": "Fecha",
       "reason": "Motivo (opcional)"
+    },
+    "orders": {
+      "title": "Pedidos",
+      "filterLabel": "Filtrar pedidos por estado",
+      "filterAll": "Todos",
+      "status": {
+        "pending_shipping": "Falta el envío",
+        "pending_quote": "Falta el precio",
+        "awaiting_deposit": "Esperando pago",
+        "awaiting_review": "Revisar pago",
+        "confirmed": "Confirmado",
+        "cancelled": "Cancelado"
+      },
+      "overdueSummary": "{count, plural, one {# pedido espera} other {# pedidos esperan}} tu revisión desde hace más de {hours} horas.",
+      "overdue": "Espera tu revisión desde hace más de {hours} horas",
+      "empty": "Todavía no hay pedidos.",
+      "emptyFiltered": "No hay pedidos con este estado.",
+      "total": "Total",
+      "pendingActions": "Por hacer",
+      "actions": {
+        "set_shipping": "Poner el costo de envío",
+        "set_price": "Poner el precio",
+        "approve": "Aprobar el comprobante",
+        "reject": "Rechazar el comprobante",
+        "cancel": "Cancelar el pedido"
+      },
+      "limitNote": "Se muestran los {limit} pedidos más recientes. Usa los filtros para ver otros.",
+      "back": "← Volver a pedidos",
+      "detailTitle": "Pedido de {name}",
+      "createdAt": "Hecho el {when}",
+      "deadline": "El cliente tiene hasta el {when} para pagar.",
+      "customer": "Cliente",
+      "customerName": "Nombre",
+      "customerPhone": "Teléfono",
+      "fields": {
+        "date": "Fecha",
+        "place": "Lugar",
+        "address": "Dirección",
+        "notes": "Notas"
+      },
+      "lines": "Productos",
+      "unnamed": "Producto",
+      "people": "{count, plural, one {# persona} other {# personas}}",
+      "extras": "Con: {list}",
+      "slot": "Reserva: {when}",
+      "date": "Fecha: {date}",
+      "pendingQuoteLine": "Más personas que la última tarifa: tú pones el precio.",
+      "amounts": "Montos",
+      "subtotal": "Subtotal",
+      "shipping": "Envío",
+      "depositDue": "Anticipo a pagar",
+      "dueOnDelivery": "A pagar en la entrega",
+      "prepayNote": "El envío se cobra en el anticipo.",
+      "proofs": "Comprobantes de pago",
+      "noProofs": "El cliente no ha subido comprobantes.",
+      "proofN": "Comprobante {n}",
+      "proofStatus": {
+        "pending": "Por revisar",
+        "approved": "Aprobado",
+        "rejected": "Rechazado"
+      },
+      "rejectedBecause": "Motivo del rechazo: {reason}",
+      "proofAlt": "Imagen del comprobante {n}",
+      "openProof": "Abrir el comprobante (pestaña nueva)",
+      "proofLinkHint": "El enlace dura 5 minutos. Si venció, recarga la página.",
+      "proofUnavailable": "No se pudo cargar el comprobante. Recarga la página en un momento.",
+      "actionsTitle": "Acciones",
+      "noActions": "Este pedido ya no admite cambios.",
+      "saveShipping": "Guardar envío",
+      "shippingFee": "Costo de envío ({currency})",
+      "amountHint": "En {currency}, con punto decimal (por ejemplo 150.00). El total y el anticipo se recalculan.",
+      "amountHintConverted": "En {currency}, con punto decimal (por ejemplo 150.00). Se convierte a {orderCurrency} con la tasa del pedido; el total y el anticipo se recalculan.",
+      "priceIntro": "El pedido tiene más personas que tu última tarifa. Escribe el precio de esa parte.",
+      "savePrice": "Guardar precio",
+      "quotedPrice": "Precio ({currency})",
+      "confirmOrder": "Confirmar el pedido",
+      "approveIntro": "Revisa que el pago llegó a tu cuenta antes de aprobar.",
+      "confirmIntro": "Este pedido se paga en la entrega. Confírmalo para apartar el producto y el horario.",
+      "approve": "Aprobar",
+      "approveConfirm": "¿Confirmas que recibiste el pago? El pedido quedará confirmado.",
+      "confirmOrderConfirm": "¿Confirmar este pedido?",
+      "rejectIntro": "El pedido vuelve a esperar pago y el cliente puede subir otro comprobante.",
+      "reject": "Rechazar",
+      "reason": "Motivo",
+      "rejectReasonHint": "El cliente lo verá. Por ejemplo: el monto no coincide.",
+      "cancelIntro": "El producto y el horario apartados vuelven a estar disponibles.",
+      "cancelConfirmedWarning": "Este pedido ya está confirmado. Al cancelarlo, el producto vuelve al inventario y el horario se libera. No lo canceles si ya lo entregaste.",
+      "cancel": "Cancelar pedido",
+      "cancelConfirm": "¿Cancelar este pedido? El producto y el horario vuelven a estar disponibles.",
+      "cancelConfirmedConfirm": "¿Cancelar este pedido confirmado? El producto vuelve al inventario y el horario se libera. No lo hagas si ya lo entregaste.",
+      "cancelReasonHint": "Queda en el historial del pedido.",
+      "history": "Historial",
+      "eventCreated": "Pedido creado: {to}",
+      "eventChange": "{from} → {to}",
+      "eventReason": "Motivo: {reason}",
+      "actor": {
+        "owner": "tú",
+        "customer": "cliente",
+        "system": "automático"
+      }
     }
   },
   "agency": {
@@ -409,7 +511,13 @@
       "insufficientStock": "No hay suficientes existencias para restar esa cantidad.",
       "notTracked": "Esta variante no controla existencias.",
       "stockValue": "Usa un número entero (no negativo si fijas la cantidad).",
-      "failed": "No se pudo guardar. Inténtalo de nuevo."
+      "failed": "No se pudo guardar. Inténtalo de nuevo.",
+      "reasonRequired": "Escribe el motivo.",
+      "reasonTooLong": "Máximo 1000 caracteres.",
+      "holdsReleased": "No se puede confirmar: el plazo de pago venció y el producto o el horario ya se liberaron. Si el cliente pagó tarde, crea el pedido de nuevo o devuélvele el dinero.",
+      "orderNotFound": "Este pedido ya no existe.",
+      "noProof": "No hay un comprobante por revisar.",
+      "orderState": "El pedido cambió mientras lo veías. Recarga la página."
     }
   }
 }

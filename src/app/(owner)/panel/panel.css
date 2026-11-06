@@ -264,3 +264,135 @@
 .panel .inline-form .form-actions {
   margin-top: 0;
 }
+
+/* Orders */
+.panel .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.panel .filters a {
+  display: inline-block;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.panel .filters a[aria-current="page"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.panel .badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.panel .badge.status-awaiting_review,
+.panel .badge.status-pending_shipping,
+.panel .badge.status-pending_quote,
+.panel .badge.proof-pending {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel .badge.status-confirmed,
+.panel .badge.proof-approved {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.panel .badge.status-cancelled,
+.panel .badge.proof-rejected {
+  color: var(--muted);
+}
+
+.panel .badge.warn,
+.panel .alert {
+  border: 2px solid var(--danger);
+  color: var(--danger);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 8px 0;
+  font-weight: 600;
+}
+
+.panel .order-name {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.panel .order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0;
+}
+
+.panel .facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.panel .fact {
+  display: grid;
+  grid-template-columns: minmax(8rem, 40%) 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--soft);
+}
+
+.panel .fact dt {
+  color: var(--muted);
+}
+
+.panel .fact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel .proof-image {
+  display: block;
+  max-width: 100%;
+  max-height: 32rem;
+  height: auto;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+}
+
+.panel .action {
+  margin-bottom: 12px;
+}
+
+.panel .history {
+  padding-left: 20px;
+}
+
+.panel .history li {
+  margin-bottom: 8px;
+}
+
+.panel .event-reason {
+  margin: 2px 0 0;
+}
+
+@media (max-width: 30rem) {
+  .panel .fact {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

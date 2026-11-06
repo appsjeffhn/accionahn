@@ -20,6 +20,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
               <Link href="/panel">{t("home")}</Link>
             </li>
             <li>
+              <Link href="/panel/orders">{t("orders")}</Link>
+            </li>
+            <li>
               <Link href="/panel/products">{t("products")}</Link>
             </li>
             <li>

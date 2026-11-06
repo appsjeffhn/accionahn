@@ -22,6 +22,7 @@ describe('message catalogs', () => {
       'src/lib/catalog/form.ts',
       'src/app/(owner)/panel/session.ts',
       'src/app/(owner)/panel/products/actions.ts',
+      'src/app/(owner)/panel/orders/actions.ts',
     ].map((f) => readFileSync(f, 'utf8'))
     const used = new Set<string>()
     for (const src of sources) {

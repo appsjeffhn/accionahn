@@ -34,12 +34,14 @@
       "home": "Home",
       "products": "Products",
       "calendar": "Calendar",
-      "settings": "Settings"
+      "settings": "Settings",
+      "orders": "Orders"
     },
     "home": {
       "products": "Create and edit products, prices, variants and stock.",
       "calendar": "Teams, opening hours and closed days for bookable products.",
-      "settings": "Shipping, bank transfer payments, date surcharges and time zone."
+      "settings": "Shipping, bank transfer payments, date surcharges and time zone.",
+      "orders": "Review payments, set shipping fees and prices, confirm or cancel orders."
     },
     "form": {
       "fixFields": "Please check the marked fields.",
@@ -250,6 +252,106 @@
       "addClosed": "Add closed day",
       "day": "Date",
       "reason": "Reason (optional)"
+    },
+    "orders": {
+      "title": "Orders",
+      "filterLabel": "Filter orders by status",
+      "filterAll": "All",
+      "status": {
+        "pending_shipping": "Shipping needed",
+        "pending_quote": "Price needed",
+        "awaiting_deposit": "Awaiting payment",
+        "awaiting_review": "Review payment",
+        "confirmed": "Confirmed",
+        "cancelled": "Cancelled"
+      },
+      "overdueSummary": "{count, plural, one {# order has} other {# orders have}} been awaiting your review for more than {hours} hours.",
+      "overdue": "Awaiting your review for more than {hours} hours",
+      "empty": "No orders yet.",
+      "emptyFiltered": "No orders with this status.",
+      "total": "Total",
+      "pendingActions": "To do",
+      "actions": {
+        "set_shipping": "Set the shipping fee",
+        "set_price": "Set the price",
+        "approve": "Approve the proof",
+        "reject": "Reject the proof",
+        "cancel": "Cancel the order"
+      },
+      "limitNote": "Showing the {limit} most recent orders. Use the filters to see others.",
+      "back": "← Back to orders",
+      "detailTitle": "Order from {name}",
+      "createdAt": "Placed on {when}",
+      "deadline": "The customer has until {when} to pay.",
+      "customer": "Customer",
+      "customerName": "Name",
+      "customerPhone": "Phone",
+      "fields": {
+        "date": "Date",
+        "place": "Place",
+        "address": "Address",
+        "notes": "Notes"
+      },
+      "lines": "Products",
+      "unnamed": "Product",
+      "people": "{count, plural, one {# person} other {# people}}",
+      "extras": "With: {list}",
+      "slot": "Booking: {when}",
+      "date": "Date: {date}",
+      "pendingQuoteLine": "More people than the last tier: you set the price.",
+      "amounts": "Amounts",
+      "subtotal": "Subtotal",
+      "shipping": "Shipping",
+      "depositDue": "Deposit due",
+      "dueOnDelivery": "Due on delivery",
+      "prepayNote": "Shipping is charged in the deposit.",
+      "proofs": "Payment proofs",
+      "noProofs": "The customer has not uploaded any proof.",
+      "proofN": "Proof {n}",
+      "proofStatus": {
+        "pending": "To review",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "rejectedBecause": "Rejection reason: {reason}",
+      "proofAlt": "Image of proof {n}",
+      "openProof": "Open the proof (new tab)",
+      "proofLinkHint": "The link lasts 5 minutes. If it expired, reload the page.",
+      "proofUnavailable": "The proof could not be loaded. Reload the page in a moment.",
+      "actionsTitle": "Actions",
+      "noActions": "This order can no longer be changed.",
+      "saveShipping": "Save shipping",
+      "shippingFee": "Shipping fee ({currency})",
+      "amountHint": "In {currency}, with a decimal point (for example 150.00). The total and deposit are recalculated.",
+      "amountHintConverted": "In {currency}, with a decimal point (for example 150.00). It is converted to {orderCurrency} at the order rate; the total and deposit are recalculated.",
+      "priceIntro": "The order has more people than your last tier. Type the price of that part.",
+      "savePrice": "Save price",
+      "quotedPrice": "Price ({currency})",
+      "confirmOrder": "Confirm the order",
+      "approveIntro": "Check that the payment reached your account before approving.",
+      "confirmIntro": "This order is paid on delivery. Confirm it to keep the product and the time slot.",
+      "approve": "Approve",
+      "approveConfirm": "Do you confirm you received the payment? The order will be confirmed.",
+      "confirmOrderConfirm": "Confirm this order?",
+      "rejectIntro": "The order goes back to awaiting payment and the customer can upload another proof.",
+      "reject": "Reject",
+      "reason": "Reason",
+      "rejectReasonHint": "The customer will see it. For example: the amount does not match.",
+      "cancelIntro": "The held product and time slot become available again.",
+      "cancelConfirmedWarning": "This order is already confirmed. Cancelling it returns the product to stock and frees the time slot. Do not cancel it if you already delivered it.",
+      "cancel": "Cancel order",
+      "cancelConfirm": "Cancel this order? The product and the time slot become available again.",
+      "cancelConfirmedConfirm": "Cancel this confirmed order? The product returns to stock and the time slot is freed. Do not do it if you already delivered it.",
+      "cancelReasonHint": "It is kept in the order history.",
+      "history": "History",
+      "eventCreated": "Order placed: {to}",
+      "eventChange": "{from} → {to}",
+      "eventReason": "Reason: {reason}",
+      "actor": {
+        "owner": "you",
+        "customer": "customer",
+        "system": "automatic"
+      }
     }
   },
   "agency": {
@@ -409,7 +511,13 @@
       "insufficientStock": "There is not enough stock to remove that quantity.",
       "notTracked": "This variant does not track stock.",
       "stockValue": "Use a whole number (not negative when setting the quantity).",
-      "failed": "Could not save. Please try again."
+      "failed": "Could not save. Please try again.",
+      "reasonRequired": "Type the reason.",
+      "reasonTooLong": "1000 characters at most.",
+      "holdsReleased": "It cannot be confirmed: the payment deadline passed and the product or time slot was already released. If the customer paid late, create the order again or refund them.",
+      "orderNotFound": "This order no longer exists.",
+      "noProof": "There is no proof to review.",
+      "orderState": "The order changed while you were viewing it. Reload the page."
     }
   }
 }
