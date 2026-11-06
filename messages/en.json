@@ -8,7 +8,27 @@
     "password": "Password",
     "submit": "Sign in",
     "invalidCredentials": "Incorrect email or password.",
-    "forgotPassword": "Forgot your password?"
+    "forgotPassword": "Forgot your password?",
+    "linkInvalid": "This link is invalid or has expired. Ask the agency for a new invitation.",
+    "logout": "Sign out"
+  },
+  "setPassword": {
+    "title": "Create your password",
+    "password": "New password",
+    "confirm": "Repeat the password",
+    "hint": "At least 12 characters.",
+    "submit": "Save password",
+    "errors": {
+      "tooShort": "The password must have at least 12 characters.",
+      "tooLong": "The password is too long.",
+      "mismatch": "The passwords do not match.",
+      "weak": "That password is too weak. Try a longer one.",
+      "failed": "The password could not be saved. Please try again."
+    }
+  },
+  "panel": {
+    "title": "Your store panel",
+    "welcome": "Welcome to your panel. Soon you will manage products and orders from here."
   },
   "agency": {
     "title": "Agency panel",
@@ -29,6 +49,7 @@
       "general": "General"
     },
     "configure": "Configure",
+    "inviteOwner": "Invite the owner",
     "nav": {
       "requests": "Client requests",
       "releases": "Releases"
@@ -101,6 +122,20 @@
       "rateInvalid": "Enter an exchange rate greater than 0.",
       "phoneInvalid": "Use international format, for example +50499999999.",
       "notPending": "This store was already set up."
+    },
+    "invite": {
+      "title": "Invite the owner",
+      "help": "We will email them a link to create their password and enter their store panel.",
+      "email": "Owner email",
+      "submit": "Invite the owner",
+      "sent": "Invitation sent.",
+      "errors": {
+        "invalidEmail": "Enter a valid email.",
+        "alreadyMember": "That email already belongs to another store or to the agency.",
+        "existingAccount": "That email already has an account with no store. Check it with the technical team.",
+        "tenantNotActive": "Finish setting up the store first; only the owner of an active store can be invited.",
+        "failed": "The invitation could not be sent. Please try again."
+      }
     },
     "orderKeys": {
       "place": "Place",

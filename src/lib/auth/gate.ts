@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { canAccess, requiresAuth } from './guards'
+import { areaOf, canAccess, requiresAuth } from './guards'
 import type { CookieAdapter, Session } from './session'
 
 type RotatedCookie = Parameters<NonNullable<CookieAdapter['setAll']>>[0][number]
@@ -45,6 +45,13 @@ export async function runGate(args: {
     return finish(new NextResponse('Service unavailable', { status: 503 }))
   }
   if (!canAccess(path, session, hostTenantId)) {
+    // Anonymous on a real area: send to the sign-in page of this same host.
+    // The next value is the plain pathname; /login validates it again before use.
+    if (!session && areaOf(path) !== 'invalid') {
+      const login = new URL('/login', request.nextUrl.origin)
+      login.searchParams.set('next', path)
+      return finish(NextResponse.redirect(login))
+    }
     return finish(new NextResponse('Forbidden', { status: session ? 403 : 401 }))
   }
   return finish(NextResponse.next({ request: { headers } }))

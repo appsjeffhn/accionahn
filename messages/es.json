@@ -8,7 +8,27 @@
     "password": "Contraseña",
     "submit": "Entrar",
     "invalidCredentials": "Correo o contraseña incorrectos.",
-    "forgotPassword": "¿Olvidaste tu contraseña?"
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "linkInvalid": "El enlace no es válido o ya venció. Pide a la agencia una nueva invitación.",
+    "logout": "Cerrar sesión"
+  },
+  "setPassword": {
+    "title": "Crea tu contraseña",
+    "password": "Nueva contraseña",
+    "confirm": "Repite la contraseña",
+    "hint": "Al menos 12 caracteres.",
+    "submit": "Guardar contraseña",
+    "errors": {
+      "tooShort": "La contraseña debe tener al menos 12 caracteres.",
+      "tooLong": "La contraseña es demasiado larga.",
+      "mismatch": "Las contraseñas no coinciden.",
+      "weak": "Esa contraseña es demasiado débil. Prueba con otra más larga.",
+      "failed": "No se pudo guardar la contraseña. Inténtalo de nuevo."
+    }
+  },
+  "panel": {
+    "title": "Panel de tu tienda",
+    "welcome": "Bienvenido a tu panel. Pronto podrás administrar productos y pedidos desde aquí."
   },
   "agency": {
     "title": "Panel de agencia",
@@ -29,6 +49,7 @@
       "general": "General"
     },
     "configure": "Configurar",
+    "inviteOwner": "Invitar al dueño",
     "nav": {
       "requests": "Solicitudes de clientes",
       "releases": "Liberaciones"
@@ -101,6 +122,20 @@
       "rateInvalid": "Ingresa un tipo de cambio mayor que 0.",
       "phoneInvalid": "Usa el formato internacional, por ejemplo +50499999999.",
       "notPending": "Esta tienda ya fue configurada."
+    },
+    "invite": {
+      "title": "Invitar al dueño",
+      "help": "Le enviaremos un correo para que cree su contraseña y entre al panel de su tienda.",
+      "email": "Correo del dueño",
+      "submit": "Invitar al dueño",
+      "sent": "Invitación enviada.",
+      "errors": {
+        "invalidEmail": "Escribe un correo válido.",
+        "alreadyMember": "Ese correo ya pertenece a otra tienda o a la agencia.",
+        "existingAccount": "Ese correo ya tiene una cuenta sin tienda. Revísalo con el equipo técnico.",
+        "tenantNotActive": "Primero termina de configurar la tienda; solo se invita al dueño de una tienda activa.",
+        "failed": "No se pudo enviar la invitación. Inténtalo de nuevo."
+      }
     },
     "orderKeys": {
       "place": "Lugar",

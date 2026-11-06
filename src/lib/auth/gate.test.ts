@@ -56,10 +56,26 @@ describe('runGate', () => {
     expect(res.headers.get('cache-control')).toBe('no-store')
   })
 
-  it('401 for anonymous and no cookies means no no-store requirement', async () => {
-    const res = await run('/agency', null, async () => null)
-    expect(res.status).toBe(401)
+  it('redirects anonymous to /login with the requested path as next', async () => {
+    const res = await run('/agency/requests', null, async () => null)
+    expect(res.status).toBe(307)
+    const location = new URL(res.headers.get('location') ?? '')
+    expect(location.host).toBe('a.test')
+    expect(location.pathname).toBe('/login')
+    expect(location.searchParams.get('next')).toBe('/agency/requests')
     expect(res.headers.get('set-cookie')).toBeNull()
+  })
+
+  it('redirects anonymous on /panel and keeps rotated cookies', async () => {
+    const res = await run('/panel', 'A', rotating(async () => null))
+    expect(res.status).toBe(307)
+    expect(new URL(res.headers.get('location') ?? '').searchParams.get('next')).toBe('/panel')
+    expect(res.headers.get('set-cookie')).toContain('sb-token=new-refresh')
+  })
+
+  it('401 (no redirect) for anonymous on an undecodable path', async () => {
+    const res = await run('/%E0%A4%A', null, async () => null)
+    expect(res.status).toBe(401)
   })
 
   it('does not call the session loader for public paths', async () => {

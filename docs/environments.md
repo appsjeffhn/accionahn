@@ -69,6 +69,20 @@ Supabase Storage no corre en local, así que se crea y se prueba a mano en cada 
 2. No agregues políticas para `anon` ni `authenticated`: la aplicación sube y firma enlaces con la clave service_role, y cada archivo queda en `<tenant_id>/<order_id>/<uuid>`.
 3. Prueba en staging: haz un pedido con anticipo, sube un comprobante desde el enlace del pedido y comprueba que aparece en el bucket y que el panel lo abre con un enlace firmado.
 
+### Invitación del dueño y acceso al panel (staging y producción, Solo la persona dueña)
+
+El administrador de la agencia invita al dueño de una tienda **activa** desde **Panel de agencia > Invitar al dueño** (página de la tienda). Supabase le envía un correo; el enlace abre `https://<subdominio>/auth/callback` en la tienda, donde el dueño crea su contraseña y entra a `/panel`. Después entra con correo y contraseña en `https://<subdominio>/login`. La agencia entra en `https://app.<dominio>/login`.
+
+En cada proyecto de Supabase (staging y producción):
+
+1. **Correo (SMTP)**: **Authentication > Emails > SMTP Settings**, activa un SMTP propio (por ejemplo el de tu proveedor de correo). Sin SMTP propio Supabase solo envía unos pocos correos por hora y únicamente a miembros del equipo del proyecto, así que las invitaciones a clientes no llegarían.
+2. **Plantilla de invitación**: **Authentication > Emails > Templates > Invite user**. Reemplaza el enlace del cuerpo por `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite` (puedes copiar el texto de `supabase/templates/invite.html`). Con la plantilla original el enlace no funciona.
+3. **Direcciones permitidas**: **Authentication > URL Configuration > Redirect URLs**, agrega `https://*.staging.accionahn.com/auth/callback` en staging y `https://*.accionahn.com/auth/callback` en producción. Si falta, el enlace del correo apunta a la *Site URL* y el dueño ve un error.
+4. **Registro abierto**: en **Authentication > Sign In / Providers**, desactiva *Allow new users to sign up*. Las invitaciones siguen funcionando, y así nadie puede crear por su cuenta una cuenta con el correo de un dueño antes de que lo invites.
+5. Los intentos de inicio de sesión los limita Supabase Auth por IP (**Authentication > Rate Limits**); la aplicación no lleva su propio contador.
+
+En local no hace falta SMTP: los correos quedan en el buzón de prueba del Supabase local (Inbucket/Mailpit), en http://127.0.0.1:54324. La plantilla y la dirección permitida local (`http://*.accionahn.com:3000/auth/callback`) ya están en `supabase/config.toml`; tras cambiarlos hay que reiniciar con `pnpm exec supabase stop` y `pnpm exec supabase start`.
+
 ## 5. Crear el primer administrador de la agencia
 
 Hay dos caminos. En local y staging se usa el script de semilla, que además crea al cliente piloto Spezia; corre únicamente con `APP_ENV` en `local` o `staging` y en producción se niega a ejecutarse. En producción el administrador se crea a mano (paso 4).

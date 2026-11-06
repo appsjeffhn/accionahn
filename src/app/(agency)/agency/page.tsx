@@ -64,6 +64,11 @@ export default async function AgencyHomePage() {
                       {t("configure")}
                     </Link>
                   )}
+                  {r.status === "active" && (
+                    <Link href={`/agency/tenants/${r.id}/wizard`}>
+                      {t("inviteOwner")}
+                    </Link>
+                  )}
                 </td>
               </tr>
             ))}
