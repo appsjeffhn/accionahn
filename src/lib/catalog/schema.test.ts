@@ -24,7 +24,10 @@ const config = () => ({
   ],
   toppings: [{ id: 'onion', extraPriceMinor: 0 }],
 })
+const PID = '11111111-1111-4111-8111-111111111111'
+const VID = '22222222-2222-4222-8222-222222222222'
 const simple = () => ({
+  id: PID,
   tenantId: T,
   kind: 'simple' as const,
   reservable: false,
@@ -71,14 +74,22 @@ describe('productInputSchema', () => {
     expect(productInputSchema.safeParse(bad).success).toBe(false)
   })
 
+  it('requires client-supplied ids so a retry cannot duplicate rows', () => {
+    const noId: Partial<ReturnType<typeof simple>> = simple()
+    delete noId.id
+    expect(productInputSchema.safeParse(noId).success).toBe(false)
+    const noVariantId = { ...simple(), variants: [{ label: text, stock: 1, active: true }] }
+    expect(productInputSchema.safeParse(noVariantId).success).toBe(false)
+  })
+
   it('requires es and en text', () => {
     expect(productInputSchema.safeParse({ ...simple(), name: { es: 'x', en: '' } }).success).toBe(false)
   })
 
   it('accepts variants with null stock and rejects negative stock', () => {
-    const ok = { ...simple(), variants: [{ label: text, sku: null, stock: null, active: true }] }
+    const ok = { ...simple(), variants: [{ id: VID, label: text, sku: null, stock: null, active: true }] }
     expect(productInputSchema.safeParse(ok).success).toBe(true)
-    const bad = { ...simple(), variants: [{ label: text, stock: -1, active: true }] }
+    const bad = { ...simple(), variants: [{ id: VID, label: text, stock: -1, active: true }] }
     expect(productInputSchema.safeParse(bad).success).toBe(false)
   })
 })

@@ -72,8 +72,9 @@ export const depositSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('fixed'), value: minor }),
 ])
 
+// Ids are chosen by the client so that retrying a save cannot create duplicates.
 const variantSchema = z.object({
-  id: z.uuid().optional(),
+  id: z.uuid(),
   label: text,
   sku: z.string().trim().max(64).nullish(),
   // null: stock is not tracked
@@ -83,7 +84,7 @@ const variantSchema = z.object({
 
 export const productInputSchema = z
   .object({
-    id: z.uuid().optional(),
+    id: z.uuid(),
     tenantId: z.string().min(1),
     kind: z.enum(['simple', 'configurable']),
     reservable: z.boolean(),

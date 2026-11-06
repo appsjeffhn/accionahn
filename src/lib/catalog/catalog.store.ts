@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { ForbiddenError } from '../auth/session'
 import { createServiceClient } from '../supabase/service'
 import type { CatalogStore, ProductWrite, SettingsWrite } from './catalog'
 
@@ -25,63 +26,38 @@ export function createSupabaseCatalogStore(
       return { products, variants, dateRules, zones, settings: settings[0] ?? null }
     },
 
-    async productTenant(productId) {
-      const { data, error } = await supabase
-        .from('products')
-        .select('tenant_id')
-        .eq('id', productId)
-        .maybeSingle()
-      if (error) throw error
-      return (data?.tenant_id as string | undefined) ?? null
-    },
-
     async saveProduct(write: ProductWrite) {
-      const row = {
-        ...(write.id ? { id: write.id } : {}),
-        tenant_id: write.tenantId,
-        kind: write.kind,
-        reservable: write.reservable,
-        name: write.name,
-        description: write.description,
-        price_minor: write.priceMinor,
-        fixed_prices: write.fixedPrices,
-        configurable: write.kind === 'configurable' ? write.configurable : null,
-        deposit: write.deposit,
-        images: write.images,
-        active: write.active,
-      }
-      const { data, error } = await supabase.from('products').upsert(row).select('id').single()
-      if (error) throw error
-      const productId = data.id as string
-
-      if (write.variants) {
-        // Variants missing from the input are deactivated, never deleted: orders may point at them.
-        const keep = write.variants.filter((v) => v.id).map((v) => v.id as string)
-        const stale = supabase
-          .from('product_variants')
-          .update({ active: false })
-          .eq('product_id', productId)
-          .eq('tenant_id', write.tenantId)
-        const { error: staleError } = keep.length
-          ? await stale.not('id', 'in', `(${keep.join(',')})`)
-          : await stale
-        if (staleError) throw staleError
-        if (write.variants.length > 0) {
-          const { error: vError } = await supabase.from('product_variants').upsert(
-            write.variants.map((v) => ({
-              ...(v.id ? { id: v.id } : {}),
-              tenant_id: write.tenantId,
-              product_id: productId,
+      const { data, error } = await supabase.rpc('save_product', {
+        p_tenant: write.tenantId,
+        p_product: {
+          id: write.id,
+          kind: write.kind,
+          reservable: write.reservable,
+          name: write.name,
+          description: write.description,
+          price_minor: write.priceMinor,
+          fixed_prices: write.fixedPrices,
+          configurable: write.kind === 'configurable' ? write.configurable : null,
+          deposit: write.deposit,
+          images: write.images,
+          active: write.active,
+        },
+        p_variants: write.variants
+          ? write.variants.map((v) => ({
+              id: v.id,
               label: v.label,
               sku: v.sku ?? null,
               stock: v.stock ?? null,
               active: v.active,
-            })),
-          )
-          if (vError) throw vError
-        }
+            }))
+          : null,
+      })
+      if (error) {
+        // 42501: the product or a variant id belongs to another tenant or product.
+        if (error.code === '42501') throw new ForbiddenError()
+        throw error
       }
-      return { id: productId }
+      return { id: data as string }
     },
 
     async saveSettings(write: SettingsWrite) {

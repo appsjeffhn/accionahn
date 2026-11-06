@@ -19,10 +19,17 @@ export type StoreCatalog = {
   settings: Row | null
 }
 
+export type PublicCatalog = {
+  products: Row[]
+  variants: (Row & { inStock: boolean })[]
+  dateRules: Row[]
+  zones: Row[]
+  settings: Row | null
+}
+
 export type CatalogStore = {
   list: (tenantId: string) => Promise<StoreCatalog>
-  // Tenant that owns an existing product, or null when it does not exist.
-  productTenant: (productId: string) => Promise<string | null>
+  // One transaction; throws ForbiddenError when the product or a variant id belongs elsewhere.
   saveProduct: (write: ProductWrite) => Promise<{ id: string }>
   saveSettings: (write: SettingsWrite) => Promise<void>
 }
@@ -35,20 +42,50 @@ async function resolveStore(store?: CatalogStore): Promise<CatalogStore> {
   return createSupabaseCatalogStore()
 }
 
-// An agency admin may write any tenant; an owner only their own.
-function assertCanWrite(session: Session | null, tenantId: string): void {
-  if (!session) throw new ForbiddenError()
+// An agency admin may use any tenant; an owner only their own.
+function assertTenantAccess(session: Session | null, tenantId: unknown): asserts tenantId is string {
+  if (!session || typeof tenantId !== 'string') throw new ForbiddenError()
   if (session.role === 'agency_admin') return
   if (session.role !== 'business_owner' || !session.tenantId || session.tenantId !== tenantId) {
     throw new ForbiddenError()
   }
 }
 
-export async function listStoreCatalog(
+// Everything, including inactive products, stock and payment instructions.
+export async function listOwnerCatalog(
+  session: Session | null,
   tenantId: string,
   deps: CatalogDeps = {},
 ): Promise<StoreCatalog> {
+  assertTenantAccess(session, tenantId)
   return (await resolveStore(deps.store)).list(tenantId)
+}
+
+function omit(row: Row, keys: string[]): Row {
+  return Object.fromEntries(Object.entries(row).filter(([k]) => !keys.includes(k)))
+}
+
+// Storefront view: active items only, `inStock` instead of stock counts, no SKUs and no
+// payment instructions. Needs no session.
+export async function listPublicCatalog(
+  tenantId: string,
+  deps: CatalogDeps = {},
+): Promise<PublicCatalog> {
+  const all = await (await resolveStore(deps.store)).list(tenantId)
+  const products = all.products.filter((p) => p.active === true)
+  const productIds = new Set(products.map((p) => p.id))
+  const variants = all.variants
+    .filter((v) => v.active === true && productIds.has(v.product_id))
+    .map((v) => {
+      const stock = v.stock
+      const rest = omit(v, ['stock', 'sku', 'tenant_id'])
+      return { ...rest, inStock: stock === null || stock === undefined || Number(stock) > 0 }
+    })
+  let settings: Row | null = null
+  if (all.settings) {
+    settings = omit(all.settings, ['payment_instructions'])
+  }
+  return { products, variants, dateRules: all.dateRules, zones: all.zones, settings }
 }
 
 export async function saveProduct(
@@ -56,16 +93,11 @@ export async function saveProduct(
   input: unknown,
   deps: CatalogDeps = {},
 ): Promise<{ id: string }> {
-  const raw = (input ?? {}) as { tenantId?: unknown }
-  if (typeof raw.tenantId === 'string') assertCanWrite(session, raw.tenantId)
-  else throw new ForbiddenError()
+  assertTenantAccess(session, (input as { tenantId?: unknown } | null)?.tenantId)
   const product = productInputSchema.parse(input)
-  const store = await resolveStore(deps.store)
-  if (product.id) {
-    const owner = await store.productTenant(product.id)
-    if (owner !== null && owner !== product.tenantId) throw new ForbiddenError()
-  }
-  return store.saveProduct(product)
+  // Ownership of the product and of every variant id is checked inside the database
+  // function, in the same transaction as the write.
+  return (await resolveStore(deps.store)).saveProduct(product)
 }
 
 export async function saveSettings(
@@ -73,9 +105,7 @@ export async function saveSettings(
   input: unknown,
   deps: CatalogDeps = {},
 ): Promise<void> {
-  const raw = (input ?? {}) as { tenantId?: unknown }
-  if (typeof raw.tenantId === 'string') assertCanWrite(session, raw.tenantId)
-  else throw new ForbiddenError()
+  assertTenantAccess(session, (input as { tenantId?: unknown } | null)?.tenantId)
   const settings = storeSettingsInputSchema.parse(input)
   await (await resolveStore(deps.store)).saveSettings(settings)
 }

@@ -1,19 +1,26 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import { ForbiddenError, type Session } from '../auth/session'
 import {
-  listStoreCatalog,
+  listOwnerCatalog,
+  listPublicCatalog,
   saveProduct,
   saveSettings,
   type CatalogStore,
   type ProductWrite,
   type SettingsWrite,
+  type StoreCatalog,
 } from './catalog'
+import { createSupabaseCatalogStore } from './catalog.store'
 
 const ownerA: Session = { userId: 'o-a', role: 'business_owner', tenantId: 'A' }
 const admin: Session = { userId: 'admin', role: 'agency_admin', tenantId: null }
 const text = { es: 'Hola', en: 'Hello' }
+const PID = '11111111-1111-4111-8111-111111111111'
+const VID = '22222222-2222-4222-8222-222222222222'
 
 const product = (tenantId = 'A', patch: object = {}) => ({
+  id: PID,
   tenantId,
   kind: 'simple' as const,
   reservable: false,
@@ -21,7 +28,7 @@ const product = (tenantId = 'A', patch: object = {}) => ({
   description: text,
   priceMinor: 1000,
   fixedPrices: {},
-  deposit: { kind: 'none' as const, value: 0 },
+  deposit: { kind: 'none' as const, value: 0 as const },
   images: [],
   active: true,
   ...patch,
@@ -38,30 +45,29 @@ const settings = (tenantId = 'A') => ({
   theme: {},
 })
 
-function makeStore(owners: Record<string, string> = {}) {
+function makeStore(owners: Record<string, string> = {}, catalog?: Partial<StoreCatalog>) {
   const products: ProductWrite[] = []
   const savedSettings: SettingsWrite[] = []
   const store: CatalogStore = {
     async list(tenantId) {
       return {
-        products: products.filter((p) => p.tenantId === tenantId),
+        products: products.filter((p) => p.tenantId === tenantId) as never[],
         variants: [],
         dateRules: [],
         zones: [],
-        settings: savedSettings.find((s) => s.tenantId === tenantId) ?? null,
+        settings: null,
+        ...catalog,
       }
-    },
-    async productTenant(id) {
-      return owners[id] ?? null
     },
     async saveProduct(write) {
       products.push(write)
-      return { id: write.id ?? 'new-id' }
+      return { id: write.id }
     },
     async saveSettings(write) {
       savedSettings.push(write)
     },
   }
+  void owners
   return { store, products, savedSettings }
 }
 
@@ -79,18 +85,9 @@ describe('saveProduct', () => {
     await expect(saveProduct(orphan, product(), { store })).rejects.toBeInstanceOf(ForbiddenError)
   })
 
-  it('rejects updating an existing product that belongs to another tenant', async () => {
-    const id = '11111111-1111-4111-8111-111111111111'
-    const { store, products } = makeStore({ [id]: 'B' })
-    await expect(saveProduct(ownerA, product('A', { id }), { store })).rejects.toBeInstanceOf(
-      ForbiddenError,
-    )
-    expect(products).toEqual([])
-  })
-
   it('saves for the own tenant and for an agency admin', async () => {
     const { store, products } = makeStore()
-    await expect(saveProduct(ownerA, product(), { store })).resolves.toEqual({ id: 'new-id' })
+    await expect(saveProduct(ownerA, product(), { store })).resolves.toEqual({ id: PID })
     await saveProduct(admin, product('B'), { store })
     expect(products.map((p) => p.tenantId)).toEqual(['A', 'B'])
   })
@@ -99,6 +96,59 @@ describe('saveProduct', () => {
     const { store, products } = makeStore()
     await expect(saveProduct(ownerA, product('A', { priceMinor: -1 }), { store })).rejects.toThrow()
     expect(products).toEqual([])
+  })
+})
+
+describe('createSupabaseCatalogStore.saveProduct', () => {
+  function fakeClient(result: { data: unknown; error: { code: string; message: string } | null }) {
+    const calls: { fn: string; args: Record<string, unknown> }[] = []
+    const client = {
+      rpc: async (fn: string, args: Record<string, unknown>) => {
+        calls.push({ fn, args })
+        return result
+      },
+    } as unknown as SupabaseClient
+    return { client, calls }
+  }
+
+  it('saves product and variants in one rpc call', async () => {
+    const { client, calls } = fakeClient({ data: PID, error: null })
+    const store = createSupabaseCatalogStore(client)
+    const out = await store.saveProduct({
+      ...product(),
+      variants: [{ id: VID, label: text, sku: null, stock: 2, active: true }],
+    })
+    expect(out).toEqual({ id: PID })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].fn).toBe('save_product')
+    expect(calls[0].args.p_tenant).toBe('A')
+  })
+
+  it('throws ForbiddenError when the rpc reports a foreign variant or product (42501)', async () => {
+    const { client } = fakeClient({
+      data: null,
+      error: { code: '42501', message: 'variant belongs to another product or tenant' },
+    })
+    const store = createSupabaseCatalogStore(client)
+    await expect(
+      store.saveProduct({
+        ...product(),
+        variants: [{ id: VID, label: text, sku: null, stock: 2, active: true }],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError)
+  })
+
+  it('saveProduct surfaces that ForbiddenError to the caller', async () => {
+    const { client } = fakeClient({ data: null, error: { code: '42501', message: 'x' } })
+    await expect(
+      saveProduct(ownerA, product(), { store: createSupabaseCatalogStore(client) }),
+    ).rejects.toBeInstanceOf(ForbiddenError)
+  })
+
+  it('rethrows other database errors unchanged', async () => {
+    const err = { code: '23514', message: 'check violation' }
+    const { client } = fakeClient({ data: null, error: err })
+    await expect(createSupabaseCatalogStore(client).saveProduct(product())).rejects.toBe(err)
   })
 })
 
@@ -117,12 +167,63 @@ describe('saveSettings', () => {
   })
 })
 
-describe('listStoreCatalog', () => {
-  it('returns the store data for one tenant', async () => {
+describe('catalog reads', () => {
+  const full: Partial<StoreCatalog> = {
+    products: [
+      { id: 'p1', active: true, name: text },
+      { id: 'p2', active: false, name: text },
+    ],
+    variants: [
+      { id: 'v1', product_id: 'p1', active: true, stock: 5, sku: 'S1', label: text },
+      { id: 'v2', product_id: 'p1', active: true, stock: 0, sku: 'S2', label: text },
+      { id: 'v3', product_id: 'p1', active: true, stock: null, sku: null, label: text },
+      { id: 'v4', product_id: 'p1', active: false, stock: 9, sku: null, label: text },
+      { id: 'v5', product_id: 'p2', active: true, stock: 9, sku: null, label: text },
+    ],
+    dateRules: [{ id: 'd1' }],
+    zones: [{ id: 'z1' }],
+    settings: {
+      tenant_id: 'A',
+      hold_hours: 24,
+      payment_instructions: { es: 'SINPE 9999', en: 'SINPE 9999' },
+      theme: {},
+    },
+  }
+
+  it('listOwnerCatalog returns everything to the owner of that tenant', async () => {
+    const { store } = makeStore({}, full)
+    const out = await listOwnerCatalog(ownerA, 'A', { store })
+    expect(out.products).toHaveLength(2)
+    expect(out.variants).toHaveLength(5)
+    expect(out.settings?.payment_instructions).toBeDefined()
+    expect((await listOwnerCatalog(admin, 'A', { store })).products).toHaveLength(2)
+  })
+
+  it('listOwnerCatalog rejects another tenant and no session', async () => {
+    const { store } = makeStore({}, full)
+    await expect(listOwnerCatalog(ownerA, 'B', { store })).rejects.toBeInstanceOf(ForbiddenError)
+    await expect(listOwnerCatalog(null, 'A', { store })).rejects.toBeInstanceOf(ForbiddenError)
+  })
+
+  it('listPublicCatalog hides inactive items, stock counts and payment instructions', async () => {
+    const { store } = makeStore({}, full)
+    const out = await listPublicCatalog('A', { store })
+    expect(out.products.map((p) => p.id)).toEqual(['p1'])
+    expect(out.variants.map((v) => [v.id, v.inStock])).toEqual([
+      ['v1', true],
+      ['v2', false],
+      ['v3', true],
+    ])
+    const text = JSON.stringify(out)
+    expect(text).not.toContain('stock"')
+    expect(text).not.toContain('sku')
+    expect(text).not.toContain('payment_instructions')
+    expect(text).not.toContain('SINPE')
+    expect(out.settings?.hold_hours).toBe(24)
+  })
+
+  it('listPublicCatalog copes with a tenant that has no settings yet', async () => {
     const { store } = makeStore()
-    await saveProduct(ownerA, product(), { store })
-    const out = await listStoreCatalog('A', { store })
-    expect(out.products).toHaveLength(1)
-    expect((await listStoreCatalog('B', { store })).products).toHaveLength(0)
+    expect((await listPublicCatalog('A', { store })).settings).toBeNull()
   })
 })
