@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { ForbiddenError } from '../auth/session'
 import { SlotTakenError, listAvailableSlots, localDay, type CalendarStore, type Slot } from '../calendar/calendar'
-import type { CatalogStore } from '../catalog/catalog'
+import type { CatalogStore, StoreCatalog } from '../catalog/catalog'
 import { computeQuote } from '../pricing/engine'
 import { convertMinor } from '../pricing/money'
 import type {
@@ -264,13 +264,48 @@ function dateRule(r: Row): DateRule {
   }
 }
 
-function readSettings(row: Row | null) {
+export function readStoreSettings(row: Row | null) {
   return {
     mode: (row?.shipping_mode ?? 'none') as ShippingConfig['mode'],
     fixedFeeMinor: Number(row?.fixed_fee_minor ?? 0),
     prepay: row?.shipping_prepay === true,
     perLineDate: row?.per_line_date === true,
     timezone: typeof row?.timezone === 'string' ? row.timezone : 'America/Tegucigalpa',
+  }
+}
+
+// The catalog parts pricing needs; the owner and the public catalog both fit.
+export type QuoteCatalog = Pick<StoreCatalog, 'products' | 'dateRules' | 'zones' | 'settings'>
+
+// The one engine input for a set of lines, used by createOrder to charge and by the
+// storefront (quoteForDisplay) to show the same amounts. Only active products are priced.
+export function quoteInputFor(
+  catalog: QuoteCatalog,
+  opts: {
+    currency: string
+    baseCurrency: string
+    rates: Record<string, number>
+    lines: CartLine[]
+    zoneId?: string
+    orderDate?: string
+  },
+): QuoteInput {
+  const settings = readStoreSettings(catalog.settings)
+  return {
+    currency: opts.currency,
+    baseCurrency: opts.baseCurrency,
+    rates: opts.rates,
+    products: catalog.products.filter((p) => p.active === true).map(pricedProduct),
+    lines: opts.lines,
+    dateRules: catalog.dateRules.map(dateRule),
+    shipping: {
+      mode: settings.mode,
+      zones: catalog.zones.map((z) => ({ id: z.id as string, feeMinor: Number(z.fee_minor) })),
+      fixedFeeMinor: settings.fixedFeeMinor,
+      prepay: settings.prepay,
+    },
+    zoneId: opts.zoneId,
+    orderDate: opts.orderDate,
   }
 }
 
@@ -290,7 +325,7 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
   const ordersStore = await resolveOrdersStore(deps.orders)
   const catalogStore = await resolveCatalogStore(deps.catalog)
   const [catalog, rates] = await Promise.all([catalogStore.list(tenant.id), ordersStore.loadRates(tenant.id)])
-  const settings = readSettings(catalog.settings)
+  const settings = readStoreSettings(catalog.settings)
   const products = new Map(catalog.products.filter((p) => p.active === true).map((p) => [p.id as string, p]))
 
   // Product, variant and schedule of each line. The database re-checks all of it.
@@ -340,24 +375,16 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
     date: settings.perLineDate ? dayOf(start) : undefined,
   }))
 
-  const shipping: ShippingConfig = {
-    mode: settings.mode,
-    zones: catalog.zones.map((z) => ({ id: z.id as string, feeMinor: Number(z.fee_minor) })),
-    fixedFeeMinor: settings.fixedFeeMinor,
-    prepay: settings.prepay,
-  }
-  const quoteInput: QuoteInput = {
-    currency,
-    baseCurrency: tenant.baseCurrency,
-    rates,
-    products: [...products.values()].map(pricedProduct),
-    lines: cartLines,
-    dateRules: catalog.dateRules.map(dateRule),
-    shipping,
-    zoneId: order.zoneId,
-    orderDate,
-  }
-  const quote = computeQuote(quoteInput)
+  const quote = computeQuote(
+    quoteInputFor(catalog, {
+      currency,
+      baseCurrency: tenant.baseCurrency,
+      rates,
+      lines: cartLines,
+      zoneId: order.zoneId,
+      orderDate,
+    }),
+  )
   if (quote.errors.length > 0) throw new QuoteRejectedError(quote.errors)
 
   const rate = currency === tenant.baseCurrency ? null : (rates[currency] ?? null)
