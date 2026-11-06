@@ -15,7 +15,8 @@ import {
 
 type PgError = { code?: string; message?: string }
 
-const BOOKING_ERRORS: Record<string, new () => Error> = {
+// book_slot messages (P0001) -> typed errors; also used by the orders store (create_order books slots).
+export const BOOKING_ERRORS: Record<string, new () => Error> = {
   slot_taken: SlotTakenError,
   daily_limit_reached: DailyLimitError,
   outside_hours: OutsideHoursError,

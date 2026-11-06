@@ -19,6 +19,12 @@ insert into product_variants (id, tenant_id, product_id, label, stock) values
   ('30000000-0000-0000-0000-0000000000a2', '10000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-00000000000a', '{"es":"2","en":"2"}', 5),
   ('30000000-0000-0000-0000-0000000000a3', '10000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-00000000000a', '{"es":"3","en":"3"}', null),
   ('30000000-0000-0000-0000-0000000000b1', '10000000-0000-0000-0000-00000000000b', '20000000-0000-0000-0000-00000000000b', '{"es":"B","en":"B"}', 7);
+-- stock_reservations.order_id references orders (20261106000019): the orders the holds use
+insert into orders (id, tenant_id, public_token, status, currency, base_currency, customer_name, customer_phone, subtotal_minor)
+select o.id::uuid, '10000000-0000-0000-0000-00000000000a', rpad(replace(o.id, '-', ''), 43, 'x'), 'pending_shipping', 'HNL', 'HNL', 'Test', '+50400000000', 0
+  from unnest(array['60000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002',
+                    '60000000-0000-0000-0000-000000000003', '60000000-0000-0000-0000-000000000004',
+                    '60000000-0000-0000-0000-000000000005']) as o(id);
 
 -- composite same-tenant FK: a reservation cannot pair tenant A with a tenant B variant
 select throws_ok($$insert into stock_reservations (tenant_id, variant_id, qty, status) values ('10000000-0000-0000-0000-00000000000a', '30000000-0000-0000-0000-0000000000b1', 1, 'held')$$, '23503', null, 'reservation must reference a variant of the same tenant');

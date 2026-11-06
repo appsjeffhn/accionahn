@@ -120,7 +120,8 @@ function zonedToUtc(day: string, minutes: number, tz: string): number {
   return utc
 }
 
-function localDay(utcMs: number, tz: string): string {
+// Local calendar day (YYYY-MM-DD) of a UTC instant in `tz`.
+export function localDay(utcMs: number, tz: string): string {
   return new Date(wallClockMs(utcMs, tz)).toISOString().slice(0, 10)
 }
 
