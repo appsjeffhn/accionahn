@@ -1,1 +1,38 @@
-{ "app": { "name": "Accionahn" } }
+{
+  "app": { "name": "Accionahn" },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "invalidCredentials": "Incorrect email or password.",
+    "forgotPassword": "Forgot your password?"
+  },
+  "agency": {
+    "title": "Agency panel",
+    "tenants": "Stores",
+    "newTenant": "New store",
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "empty": "There are no stores yet."
+  },
+  "wizard": {
+    "title": "Create store",
+    "next": "Next",
+    "back": "Back",
+    "finish": "Finish",
+    "fields": {
+      "name": "Store name",
+      "slug": "Web address",
+      "defaultLocale": "Default language",
+      "baseCurrency": "Base currency"
+    },
+    "errors": {
+      "required": "This field is required.",
+      "slugTaken": "That address is already in use."
+    }
+  }
+}

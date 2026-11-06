@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { runGate } from '@/lib/auth/gate'
 import { createUserClient, readSession } from '@/lib/auth/session'
 import { parseEnv } from '@/lib/env'
+import { TENANT_LOCALE_HEADER } from '@/lib/i18n/config'
 import { lookupTenantByHostname } from '@/lib/tenancy/lookup'
 import { normalizeHost, resolveTenant } from '@/lib/tenancy/resolve'
 
@@ -25,6 +26,7 @@ export async function middleware(request: NextRequest) {
   const headers = new Headers(request.headers)
   headers.delete(TENANT_ID_HEADER)
   headers.delete(TENANT_SLUG_HEADER)
+  headers.delete(TENANT_LOCALE_HEADER)
 
   const host = request.headers.get('host') ?? ''
   const { ROOT_DOMAIN } = parseEnv(process.env)
@@ -40,6 +42,7 @@ export async function middleware(request: NextRequest) {
 
   headers.set(TENANT_ID_HEADER, tenant.id)
   headers.set(TENANT_SLUG_HEADER, tenant.slug)
+  headers.set(TENANT_LOCALE_HEADER, tenant.defaultLocale)
   return gate(request, headers, tenant.id)
 }
 
