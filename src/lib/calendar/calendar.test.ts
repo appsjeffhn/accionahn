@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listAvailableSlots, type CalendarDay, type CalendarStore } from './calendar'
+import { listAvailableSlots, listDaySlots, type CalendarDay, type CalendarStore } from './calendar'
 import { parseRange } from './calendar.store'
 
 // Monday 2099-03-02 in America/Tegucigalpa (UTC-6, no DST).
@@ -162,5 +162,77 @@ describe('parseRange', () => {
       start: '2099-03-02T15:00:00.000Z',
       end: '2099-03-02T18:30:00.000Z',
     })
+  })
+})
+
+describe('listDaySlots: why a day has no slots', () => {
+  it('says the day is full when the daily limit is reached, and only then', async () => {
+    const full = spezia({
+      calendar: { ...spezia().calendar!, dailyLimit: 1 },
+      bookings: [{ resourceId: 'r9', productId: 'cake', start: '2099-03-02T16:00:00Z', end: '2099-03-02T19:00:00Z' }],
+    })
+    expect(await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(full), now: NOW })).toEqual({ slots: [], full: true })
+    const open = await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(spezia()), now: NOW })
+    expect(open.full).toBe(false)
+    expect(open.slots.length).toBeGreaterThan(0)
+    const closed = await listDaySlots('A', 'cake', DAY, undefined, {
+      store: storeFor(spezia({ closed: [{ resourceId: null, day: DAY }] })),
+      now: NOW,
+    })
+    expect(closed).toEqual({ slots: [], full: false })
+  })
+})
+
+describe('listAvailableSlots: touching or overlapping hour rows form one window', () => {
+  const local = (hhmm: string) => new Date(`${DAY}T${hhmm}:00-06:00`).toISOString()
+
+  it('05:00-08:00 next to 08:00-20:00 offers every start from 05:00 to 17:00 (3 h blocks)', async () => {
+    const day = spezia({
+      hours: [
+        { resourceId: null, weekday: 1, opens: '05:00:00', closes: '08:00:00' },
+        { resourceId: null, weekday: 1, opens: '08:00:00', closes: '20:00:00' },
+      ],
+    })
+    const starts = (await list(day)).map((s) => s.start)
+    const expected: string[] = []
+    for (let m = 5 * 60; m <= 17 * 60; m += 30) {
+      expected.push(local(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`))
+    }
+    expect(starts).toEqual(expected)
+  })
+
+  it('overlapping rows merge too, and a gap between rows still splits them', async () => {
+    const overlap = spezia({
+      hours: [
+        { resourceId: null, weekday: 1, opens: '06:00', closes: '09:00' },
+        { resourceId: null, weekday: 1, opens: '08:00', closes: '12:00' },
+      ],
+    })
+    const o = (await list(overlap)).map((s) => s.start)
+    expect(o[0]).toBe(local('06:00'))
+    expect(o).toContain(local('07:30'))
+    expect(o.at(-1)).toBe(local('09:00'))
+
+    const gap = spezia({
+      hours: [
+        { resourceId: null, weekday: 1, opens: '05:00', closes: '08:00' },
+        { resourceId: null, weekday: 1, opens: '08:30', closes: '12:00' },
+      ],
+    })
+    const g = (await list(gap)).map((s) => s.start)
+    expect(g).toEqual([local('05:00'), local('08:30'), local('09:00')])
+  })
+
+  it('keeps the grid of each row: a row opening off the hour still offers its own starts', async () => {
+    const day = spezia({
+      hours: [
+        { resourceId: null, weekday: 1, opens: '05:15', closes: '08:00' },
+        { resourceId: null, weekday: 1, opens: '08:00', closes: '20:00' },
+      ],
+    })
+    const starts = (await list(day)).map((s) => s.start)
+    expect(starts).toContain(local('08:00'))
+    expect(starts).toContain(local('05:45'))
+    expect(starts).toContain(local('17:00'))
   })
 })

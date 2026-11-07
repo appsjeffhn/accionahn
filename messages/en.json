@@ -528,7 +528,7 @@
       "invalid": "Invalid value.",
       "textRequired": "Enter this text.",
       "money": "Invalid amount.",
-      "moneyFormat": "Enter an amount with digits and a decimal point, with no more decimals than the currency uses (for example 180.00).",
+      "moneyFormat": "Enter an amount with digits and a decimal point or comma, with no thousands separator and no more decimals than the currency uses (for example 180.00 or 180,00).",
       "count": "Use a whole number from 0 to 1000.",
       "idRequired": "Enter a name (64 characters at most).",
       "tierRange": "Use whole numbers from 1, with \"from\" not above \"to\".",
@@ -698,6 +698,10 @@
         "awaiting_review": "The store is reviewing your order and will let you know when it is confirmed.",
         "confirmed": "All set! Your order is confirmed.",
         "cancelled": "This order was cancelled. If you think this is a mistake, contact the store."
+      },
+      "expired": {
+        "status": "Payment deadline passed",
+        "help": "The deadline to pay the deposit has passed, so receipts are no longer accepted. The order will be cancelled shortly. If you already paid or want to order again, contact the store."
       },
       "keepLink": "Keep this link: it is the only way to see your order.",
       "payTitle": "How to pay",

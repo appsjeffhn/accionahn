@@ -148,7 +148,7 @@ describe('parseZoneForm', () => {
   })
 
   it('rejects a malformed fee and a missing label', () => {
-    const r = parseZoneForm(form({ ...zone, fee: '6,00', 'label.es': '' }), ctx)
+    const r = parseZoneForm(form({ ...zone, fee: '6,000', 'label.es': '' }), ctx)
     expect(r.ok).toBe(false)
     if (r.ok) return
     expect(r.errors.fee).toBe('moneyFormat')

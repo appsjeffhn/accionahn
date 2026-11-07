@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import type { Cart, CartIssue } from "@/lib/cart/cart";
+import { lineVariant, type Cart, type CartIssue } from "@/lib/cart/cart";
 import type { PublicCatalog } from "@/lib/catalog/catalog";
 import { formatMoney } from "@/lib/pricing/money";
 import type { Quote } from "@/lib/pricing/types";
@@ -31,7 +31,7 @@ export async function CartLines({
     <ul className="store-lines">
       {cart.lines.map((line) => {
         const product = catalog.products.find((p) => p.id === line.productId);
-        const variant = catalog.variants.find((v) => v.id === line.variantId);
+        const variant = lineVariant(line, catalog);
         const name = product ? localized(product.name, opts.locale) || t("unnamed") : t("cart.unavailableProduct");
         const amounts = quote.lines.find((l) => l.lineId === line.lineId);
         const codes = [

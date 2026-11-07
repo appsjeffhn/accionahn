@@ -327,8 +327,8 @@
       "noActions": "Este pedido ya no admite cambios.",
       "saveShipping": "Guardar envío",
       "shippingFee": "Costo de envío ({currency})",
-      "amountHint": "En {currency}, con punto decimal (por ejemplo 150.00). El total y el anticipo se recalculan.",
-      "amountHintConverted": "En {currency}, con punto decimal (por ejemplo 150.00). Se convierte a {orderCurrency} con la tasa del pedido; el total y el anticipo se recalculan.",
+      "amountHint": "En {currency}, con coma o punto decimal (por ejemplo 150,00). El total y el anticipo se recalculan.",
+      "amountHintConverted": "En {currency}, con coma o punto decimal (por ejemplo 150,00). Se convierte a {orderCurrency} con la tasa del pedido; el total y el anticipo se recalculan.",
       "priceIntro": "El pedido tiene más personas que tu última tarifa. Escribe el precio de esa parte.",
       "multipleUnpriced": "Este pedido tiene varias partes con más personas que tu última tarifa y aquí solo se puede poner un precio. Cancélalo y pide al cliente un pedido por cada parte.",
       "savePrice": "Guardar precio",
@@ -528,7 +528,7 @@
       "invalid": "Valor no válido.",
       "textRequired": "Escribe este texto.",
       "money": "Monto no válido.",
-      "moneyFormat": "Escribe un monto con números y punto decimal, sin más decimales de los que usa la moneda (por ejemplo 180.00).",
+      "moneyFormat": "Escribe un monto con números y una coma o un punto decimal, sin separador de miles ni más decimales de los que usa la moneda (por ejemplo 180,00 o 180.00).",
       "count": "Usa un número entero entre 0 y 1000.",
       "idRequired": "Escribe un nombre (máximo 64 caracteres).",
       "tierRange": "Usa números enteros desde 1, con \"desde\" menor o igual que \"hasta\".",
@@ -698,6 +698,10 @@
         "awaiting_review": "La tienda está revisando tu pedido. Te avisará cuando esté confirmado.",
         "confirmed": "¡Listo! Tu pedido está confirmado.",
         "cancelled": "Este pedido fue cancelado. Si crees que es un error, contacta a la tienda."
+      },
+      "expired": {
+        "status": "Plazo de pago vencido",
+        "help": "La fecha límite para pagar el anticipo ya pasó, así que ya no se reciben comprobantes. El pedido se cancelará en breve. Si ya pagaste o quieres hacer el pedido otra vez, contacta a la tienda."
       },
       "keepLink": "Guarda este enlace: es la única forma de ver tu pedido.",
       "payTitle": "Cómo pagar",

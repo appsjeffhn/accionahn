@@ -121,6 +121,32 @@ function daysBetween(from: string, to: string): number {
   return (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / (24 * 60 * MINUTE)
 }
 
+// Opening windows of one day: rows that touch or overlap (05:00-08:00 and 08:00-20:00)
+// form one window, as book_slot sees them. Each row keeps its own opening as the start of
+// its slot grid, so merging only adds starts, never moves existing ones.
+function hourWindows(rows: { opens: string; closes: string }[]): { grids: number[]; closes: number }[] {
+  const sorted = rows
+    .map((h) => ({ opens: minutesOf(h.opens), closes: minutesOf(h.closes) }))
+    .sort((a, b) => a.opens - b.opens || a.closes - b.closes)
+  const windows: { grids: number[]; closes: number }[] = []
+  for (const r of sorted) {
+    const last = windows.at(-1)
+    if (last && r.opens <= last.closes) {
+      last.grids.push(r.opens)
+      last.closes = Math.max(last.closes, r.closes)
+    } else {
+      windows.push({ grids: [r.opens], closes: r.closes })
+    }
+  }
+  return windows
+}
+
+export type DaySlots = {
+  slots: Slot[]
+  // no slots because the product's daily limit is reached that day
+  full: boolean
+}
+
 // Free starts of `day` for the product, each with the resources that could take it.
 // resourceIds is empty for a tenant without resources (book_slot then creates the
 // implicit default resource; book with resourceId null).
@@ -131,21 +157,34 @@ export async function listAvailableSlots(
   resourceId?: string,
   deps: CalendarDeps = {},
 ): Promise<Slot[]> {
+  return (await listDaySlots(tenantId, productId, day, resourceId, deps)).slots
+}
+
+// The same listing, telling a day at its daily limit apart from a start that is simply
+// not offered, so checkout can say "that day is full" instead of "slot taken".
+export async function listDaySlots(
+  tenantId: string,
+  productId: string,
+  day: string,
+  resourceId?: string,
+  deps: CalendarDeps = {},
+): Promise<DaySlots> {
+  const none: DaySlots = { slots: [], full: false }
   const { y, m, d } = parseDay(day)
   const data = await (await resolveStore(deps.store)).loadDay(tenantId, productId, day)
   const cal = data.calendar
-  if (!cal) return []
+  if (!cal) return none
   const tz = data.timezone
   const now = (deps.now ?? (() => new Date()))().getTime()
 
-  if (daysBetween(localDay(now, tz), day) > cal.maxDaysAhead) return []
-  if (data.closed.some((c) => c.resourceId === null && c.day === day)) return []
+  if (daysBetween(localDay(now, tz), day) > cal.maxDaysAhead) return none
+  if (data.closed.some((c) => c.resourceId === null && c.day === day)) return none
 
   if (cal.dailyLimit !== null) {
     const used = data.bookings.filter(
       (b) => b.productId === productId && localDay(Date.parse(b.start), tz) === day,
     ).length
-    if (used >= cal.dailyLimit) return []
+    if (used >= cal.dailyLimit) return { slots: [], full: true }
   }
 
   const implicit = data.resources.length === 0
@@ -174,21 +213,23 @@ export async function listAvailableSlots(
       .filter((b) => b.resourceId === r.id)
       .map((b) => [Date.parse(b.start), Date.parse(b.end)] as const)
 
-    for (const h of hours) {
-      const closes = minutesOf(h.closes)
-      for (let s = minutesOf(h.opens); s + work <= closes; s += cal.slotStepMinutes) {
-        const start = zonedToUtc(day, s, tz)
-        if (start < earliest) continue
-        const end = start + occupied
-        if (busy.some(([bs, be]) => start < be && end > bs)) continue
-        const ids = byStart.get(start) ?? []
-        if (r.id !== '' && !ids.includes(r.id)) ids.push(r.id)
-        byStart.set(start, ids)
+    for (const w of hourWindows(hours)) {
+      for (const opens of w.grids) {
+        for (let s = opens; s + work <= w.closes; s += cal.slotStepMinutes) {
+          const start = zonedToUtc(day, s, tz)
+          if (start < earliest) continue
+          const end = start + occupied
+          if (busy.some(([bs, be]) => start < be && end > bs)) continue
+          const ids = byStart.get(start) ?? []
+          if (r.id !== '' && !ids.includes(r.id)) ids.push(r.id)
+          byStart.set(start, ids)
+        }
       }
     }
   }
 
-  return [...byStart.entries()]
+  const slots = [...byStart.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([start, ids]) => ({ start: new Date(start).toISOString(), resourceIds: ids.sort() }))
+  return { slots, full: false }
 }

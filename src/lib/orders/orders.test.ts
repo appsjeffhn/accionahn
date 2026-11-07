@@ -426,6 +426,24 @@ describe('createOrder: stock and slots, all or nothing', () => {
     expect(state.creates).toBe(0)
   })
 
+  it('a day at its daily limit refuses with DailyLimitError, not SlotTakenError', async () => {
+    const { state, deps } = world()
+    const base = deps.calendar!
+    const limited: CalendarStore = {
+      loadDay: async (...args) => {
+        const day = await base.loadDay(...args)
+        return { ...day, calendar: { ...day.calendar!, dailyLimit: 1 } }
+      },
+    }
+    const cake = { ...pickles, lines: [{ lineId: 'cake', productId: P_CAKE, qty: 1 }] }
+    await createOrder(TENANT, { ...cake, start: at('10:00') }, { ...deps, calendar: limited })
+    await expect(createOrder(TENANT, { ...cake, start: at('14:00') }, { ...deps, calendar: limited }))
+      .rejects.toBeInstanceOf(DailyLimitError)
+    // a start that is merely not offered (off-grid) on a day below its limit stays slotTaken
+    await expect(createOrder(TENANT, { ...cake, start: at('14:10') }, deps)).rejects.toBeInstanceOf(SlotTakenError)
+    expect(state.orders).toHaveLength(1)
+  })
+
   it('one order date: every reservable line uses the order start and the date rules use its local day', async () => {
     const monday = { id: 'r', kind: 'percent', value: 10, weekdays: [1], dates: [] }
     const { state, deps } = world(catalog({}, [monday]))

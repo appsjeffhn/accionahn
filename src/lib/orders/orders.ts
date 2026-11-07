@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { ForbiddenError } from '../auth/session'
-import { SlotTakenError, listAvailableSlots, localDay, type CalendarStore, type Slot } from '../calendar/calendar'
+import { DailyLimitError, SlotTakenError, listDaySlots, localDay, type CalendarStore, type DaySlots } from '../calendar/calendar'
 import type { CatalogStore, StoreCatalog } from '../catalog/catalog'
 import { computeQuote } from '../pricing/engine'
 import { convertMinor, MAX_MINOR } from '../pricing/money'
@@ -327,7 +327,7 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
 
   // The requested start must be one the calendar offers (grid, hours, notice, free).
   const now = deps.now ?? (() => new Date())
-  const offered = new Map<string, Promise<Slot[]>>()
+  const offered = new Map<string, Promise<DaySlots>>()
   for (const p of planned) {
     if (!p.start) continue
     const day = localDay(Date.parse(p.start), settings.timezone)
@@ -335,10 +335,11 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
     if (!offered.has(key)) {
       offered.set(
         key,
-        listAvailableSlots(tenant.id, p.line.productId, day, p.resourceId ?? undefined, { store: deps.calendar, now }),
+        listDaySlots(tenant.id, p.line.productId, day, p.resourceId ?? undefined, { store: deps.calendar, now }),
       )
     }
-    const slots = await offered.get(key)!
+    const { slots, full } = await offered.get(key)!
+    if (full) throw new DailyLimitError()
     if (!slots.some((s) => Date.parse(s.start) === Date.parse(p.start!))) throw new SlotTakenError()
   }
 

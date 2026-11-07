@@ -32,11 +32,13 @@ export function decimalField(fd: FormData, name: string): number {
   return /^\d{1,7}(\.\d{1,2})?$/.test(raw) ? Number(raw) : Number.NaN
 }
 
-// "180.00" -> 18000 for a 2-decimal currency. Parsed from the digits, never through a
-// float, and refused when it has more decimals than the currency uses.
+// "180.00" (or "180,00", as the Spanish UI shows amounts) -> 18000 for a 2-decimal
+// currency. One decimal separator, point or comma; never a thousands separator, sign or
+// exponent. Parsed from the digits, never through a float, and refused when it has more
+// decimals than the currency uses ("1,000" is then refused, not read as a thousand).
 export function parseMoneyInput(raw: string, currency: string): number | null {
   const exp = currencyExponent(currency)
-  const match = (exp === 0 ? /^(\d{1,12})$/ : new RegExp(`^(\\d{1,12})(?:\\.(\\d{1,${exp}}))?$`)).exec(raw.trim())
+  const match = (exp === 0 ? /^(\d{1,12})$/ : new RegExp(`^(\\d{1,12})(?:[.,](\\d{1,${exp}}))?$`)).exec(raw.trim())
   if (!match) return null
   const minor = Number(match[1]) * 10 ** exp + Number((match[2] ?? '').padEnd(exp, '0') || '0')
   return minor > MAX_MINOR ? null : minor

@@ -3,6 +3,7 @@ import type { OrderLineSnapshot } from './orders'
 import {
   CANCELLED_VISIBLE_DAYS,
   getPublicOrder,
+  trackingDisplay,
   type PublicOrderRecord,
   type PublicOrderStore,
 } from './public-order'
@@ -175,5 +176,49 @@ describe('getPublicOrder', () => {
         pendingQuote: false,
       },
     ])
+  })
+})
+
+describe('trackingDisplay: what the tracking page shows', () => {
+  const view = async (over: Partial<PublicOrderRecord>) =>
+    (await getPublicOrder(TOKEN_A, 'TA', { store: memoryStore({ [TOKEN_A]: record(over) }), now }))!
+
+  it('before the deadline: awaiting payment, instructions and the upload form', async () => {
+    const v = await view({})
+    expect(v.paymentExpired).toBe(false)
+    expect(trackingDisplay(v)).toEqual({
+      statusKey: 'status.awaiting_deposit',
+      helpKey: 'statusHelp.awaiting_deposit',
+      showPayment: true,
+      showUpload: true,
+      expired: false,
+    })
+  })
+
+  it('after the deadline but before the expiry job: an expired notice, no payment request, no upload form', async () => {
+    const v = await view({ holdExpiresAt: new Date(NOW.getTime() - 1000).toISOString() })
+    expect(v.status).toBe('awaiting_deposit') // display only: the order itself is unchanged
+    expect(v.paymentExpired).toBe(true)
+    expect(trackingDisplay(v)).toEqual({
+      statusKey: 'expired.status',
+      helpKey: 'expired.help',
+      showPayment: false,
+      showUpload: false,
+      expired: true,
+    })
+  })
+
+  it('other states keep their own texts and never show the payment block', async () => {
+    for (const status of ['awaiting_review', 'confirmed', 'pending_shipping', 'cancelled'] as const) {
+      const v = await view({ status, holdExpiresAt: new Date(NOW.getTime() - 1000).toISOString(), cancelledAt: NOW.toISOString() })
+      expect(v.paymentExpired).toBe(false)
+      expect(trackingDisplay(v)).toEqual({
+        statusKey: `status.${status}`,
+        helpKey: `statusHelp.${status}`,
+        showPayment: false,
+        showUpload: false,
+        expired: false,
+      })
+    }
   })
 })

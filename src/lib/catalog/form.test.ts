@@ -69,6 +69,20 @@ describe('parseMoneyInput', () => {
     expect(parseMoneyInput('1500.00', 'CLP')).toBeNull()
   })
 
+  it('accepts a single comma as the decimal separator (the Spanish UI shows 2450,00)', () => {
+    expect(parseMoneyInput('150,00', 'HNL')).toBe(15000)
+    expect(parseMoneyInput('150,5', 'HNL')).toBe(15050)
+    expect(parseMoneyInput(' 19,99 ', 'USD')).toBe(1999)
+  })
+
+  it('a comma is still never a thousands separator, nor mixed with a point', () => {
+    for (const raw of ['1,000', '1,234', '1.234,56', '1,234.56', '1,2,3', '150,', ',5', '-150,00', '+150,00', '1e3,00', '150,005']) {
+      expect(parseMoneyInput(raw, 'HNL'), raw).toBeNull()
+    }
+    expect(parseMoneyInput('1500,5', 'CLP')).toBeNull()
+    expect(parseMoneyInput('1500,00', 'CLP')).toBeNull()
+  })
+
   it('rejects amounts too large to store', () => {
     expect(parseMoneyInput('99999999999999', 'HNL')).toBeNull()
   })

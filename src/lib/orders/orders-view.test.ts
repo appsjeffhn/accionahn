@@ -156,11 +156,12 @@ describe('parseAmountForm', () => {
   it('parses the amount from the digits in the base currency exponent', () => {
     expect(parseAmountForm(form({ amount: '150.50' }), 'HNL')).toEqual({ ok: true, value: 15050 })
     expect(parseAmountForm(form({ amount: '0' }), 'HNL')).toEqual({ ok: true, value: 0 })
+    expect(parseAmountForm(form({ amount: '150,00' }), 'HNL')).toEqual({ ok: true, value: 15000 })
     expect(parseAmountForm(form({ amount: '2500' }), 'CLP')).toEqual({ ok: true, value: 2500 })
   })
 
   it('refuses blanks, signs, extra decimals and separators', () => {
-    for (const amount of ['', '-5', '1.234', '1,50', 'abc', '1e3']) {
+    for (const amount of ['', '-5', '1.234', '1,234', '1.234,50', 'abc', '1e3']) {
       expect(parseAmountForm(form({ amount }), 'HNL')).toEqual({ ok: false, errors: { amount: 'moneyFormat' } })
     }
     expect(parseAmountForm(form({ amount: '10.5' }), 'CLP')).toEqual({ ok: false, errors: { amount: 'moneyFormat' } })

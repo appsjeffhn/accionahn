@@ -75,6 +75,8 @@ export type PublicOrderView = {
   // transfer details, only while the order awaits its deposit
   paymentInstructions: Bilingual | null
   canUploadProof: boolean
+  // awaiting the deposit, but its deadline has passed and the expiry job has not run yet
+  paymentExpired: boolean
 }
 
 export type PublicOrderDeps = { store?: PublicOrderStore; now?: () => Date }
@@ -144,5 +146,36 @@ export async function getPublicOrder(
     rejectionReason: r.status === 'awaiting_deposit' ? r.rejectionReason : null,
     paymentInstructions,
     canUploadProof: awaitingDeposit && holdOpen,
+    paymentExpired: awaitingDeposit && !holdOpen,
+  }
+}
+
+export type TrackingDisplay = {
+  // keys under store.order
+  statusKey: string
+  helpKey: string
+  // the deposit, deadline and transfer details
+  showPayment: boolean
+  showUpload: boolean
+  expired: boolean
+}
+
+// What the tracking page shows. Between the payment deadline and the expiry job (up to
+// its interval) the order is still awaiting_deposit, but a proof would be refused: the
+// page says the deadline passed instead of asking for the payment. Display only; the
+// order is cancelled by the job.
+export function trackingDisplay(
+  v: Pick<PublicOrderView, 'status' | 'depositDueMinor' | 'canUploadProof' | 'paymentExpired'>,
+): TrackingDisplay {
+  if (v.paymentExpired) {
+    return { statusKey: 'expired.status', helpKey: 'expired.help', showPayment: false, showUpload: false, expired: true }
+  }
+  const showPayment = v.status === 'awaiting_deposit' && v.depositDueMinor !== null
+  return {
+    statusKey: `status.${v.status}`,
+    helpKey: `statusHelp.${v.status}`,
+    showPayment,
+    showUpload: showPayment && v.canUploadProof,
+    expired: false,
   }
 }

@@ -68,6 +68,9 @@ describe('message catalogs', () => {
       expect(store.order.status).toHaveProperty(s)
       expect(store.order.statusHelp).toHaveProperty(s)
     }
+    // trackingDisplay: the payment deadline passed before the expiry job ran
+    expect(store.order).toHaveProperty('expired.status')
+    expect(store.order).toHaveProperty('expired.help')
     for (const k of [...INPUT_FIELD_KEYS, NOTES_KEY]) expect(store.fields).toHaveProperty(k)
   })
 

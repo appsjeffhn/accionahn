@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { PROOF_MAX_BYTES } from "@/lib/orders/operations";
-import { getPublicOrder } from "@/lib/orders/public-order";
+import { getPublicOrder, trackingDisplay } from "@/lib/orders/public-order";
 import { formatMoney } from "@/lib/pricing/money";
 import { formatDateTime, localized } from "@/lib/store/view";
 import { uploadProofAction } from "../../actions";
@@ -43,6 +43,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
         : order.shippingFeeMinor !== null
           ? formatMoney(order.shippingFeeMinor, order.baseCurrency, locale)
           : ts("breakdown.shippingToConfirm");
+  const show = trackingDisplay(order);
   const instructions = order.paymentInstructions
     ? order.paymentInstructions[locale] || order.paymentInstructions[locale === "es" ? "en" : "es"]
     : null;
@@ -51,12 +52,12 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
     <>
       <h1>{t("title")}</h1>
       <p>
-        <span className="store-badge">{t(`status.${order.status}`)}</span>
+        <span className="store-badge">{t(show.statusKey)}</span>
       </p>
-      <p>{t(`statusHelp.${order.status}`)}</p>
+      <p className={show.expired ? "store-notice" : undefined}>{t(show.helpKey)}</p>
       <p className="store-hint">{t("keepLink")}</p>
 
-      {order.status === "awaiting_deposit" && order.depositDueMinor !== null && (
+      {show.showPayment && order.depositDueMinor !== null && (
         <section aria-labelledby="pay-title" className="store-card">
           <h2 id="pay-title">{t("payTitle")}</h2>
           <p>
@@ -74,7 +75,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
           {order.rejectionReason && (
             <p className="store-notice">{t("proofRejected", { reason: order.rejectionReason })}</p>
           )}
-          {order.canUploadProof ? (
+          {show.showUpload ? (
             <StoreForm
               action={uploadProofAction}
               submitLabel={t("proofSubmit")}

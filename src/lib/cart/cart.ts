@@ -132,6 +132,19 @@ export function cartIssues(cart: Cart, catalog: PublicCatalog): CartIssue[] {
   return issues
 }
 
+// The line's variant, only when it belongs to the line's own product. A tampered cookie
+// can name a variant of another product: that line is flagged (cartIssues) and shows no
+// variant label.
+export function lineVariant(line: CartItem, catalog: PublicCatalog): PublicCatalog['variants'][number] | undefined {
+  if (!line.variantId) return undefined
+  return catalog.variants.find((v) => v.id === line.variantId && v.product_id === line.productId)
+}
+
+// A variant that is not one of the product's (gone, inactive or another product's): the
+// line cannot be ordered (cartIssues), so it is not priced for display either.
+const unpriceable = (line: CartItem, catalog: PublicCatalog) =>
+  line.variantId !== undefined && !lineVariant(line, catalog)
+
 // --- display quote -------------------------------------------------------------------
 
 export type DisplayChoices = {
@@ -162,6 +175,7 @@ function engineLines(cart: Cart, perLineDate: boolean, timezone: string): CartLi
 
 // Display only: the same engine input createOrder builds (quoteInputFor + computeQuote),
 // so what the customer sees is what the order will charge. createOrder recomputes it.
+// Lines that cannot be ordered (a variant not of their product) are left out.
 export function quoteForDisplay(cart: Cart, catalog: PublicCatalog, choices: DisplayChoices): Quote {
   const settings = readStoreSettings(catalog.settings)
   const orderDate = settings.perLineDate
@@ -174,7 +188,11 @@ export function quoteForDisplay(cart: Cart, catalog: PublicCatalog, choices: Dis
       currency: choices.currency ?? choices.baseCurrency,
       baseCurrency: choices.baseCurrency,
       rates: choices.rates,
-      lines: engineLines(cart, settings.perLineDate, settings.timezone),
+      lines: engineLines(
+        { lines: cart.lines.filter((l) => !unpriceable(l, catalog)) },
+        settings.perLineDate,
+        settings.timezone,
+      ),
       zoneId: choices.zoneId,
       orderDate,
     }),

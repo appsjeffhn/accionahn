@@ -12,6 +12,7 @@ import {
   addToCart,
   canCheckout,
   cartIssues,
+  lineVariant,
   parseCart,
   quoteForDisplay,
   removeFromCart,
@@ -236,5 +237,28 @@ describe('cartIssues / canCheckout', () => {
     const quote = quoteForDisplay({ lines: [pickle] }, catalog, { baseCurrency: 'HNL', rates: {} })
     expect(canCheckout({ lines: [pickle] }, catalog, quote, { zoneChosen: false })).toBe(true)
     expect(canCheckout({ lines: [pickle] }, catalog, quote)).toBe(false)
+  })
+})
+
+describe('a tampered line whose variant belongs to another product', () => {
+  // the cookie is client-controlled: a jar variant attached to the taqueada
+  const forged: CartItem = { lineId: 'x', productId: P_TACO, variantId: V_JAR, qty: 1, people: 25, meats: ['Res'], toppings: [] }
+
+  it('shows no variant label for it (only a variant of the line\'s own product)', async () => {
+    const catalog = await publicCatalog()
+    expect(lineVariant(forged, catalog)).toBeUndefined()
+    expect(lineVariant(pickle, catalog)?.label).toEqual({ es: 'Frasco', en: 'Jar' })
+    expect(lineVariant({ ...pickle, variantId: undefined }, catalog)).toBeUndefined()
+  })
+
+  it('is flagged, left out of the displayed amounts, and blocks the checkout', async () => {
+    const catalog = await publicCatalog()
+    const cart: Cart = { lines: [pickle, forged] }
+    expect(cartIssues(cart, catalog)).toEqual([{ lineId: 'x', code: 'product_unavailable' }])
+    const opts = { baseCurrency: 'HNL', rates: {}, zoneId: ZONE }
+    const quote = quoteForDisplay(cart, catalog, opts)
+    expect(quote.lines.map((l) => l.lineId)).toEqual(['l1'])
+    expect(quote.subtotalMinor).toBe(quoteForDisplay({ lines: [pickle] }, catalog, opts).subtotalMinor)
+    expect(canCheckout(cart, catalog, quote)).toBe(false)
   })
 })
