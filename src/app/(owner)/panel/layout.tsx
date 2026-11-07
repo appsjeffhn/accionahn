@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -6,6 +7,12 @@ import { panelSession } from "./session";
 import "./panel.css";
 
 export const dynamic = "force-dynamic";
+
+// Every panel page; a page may add its own title later through the template.
+export async function generateMetadata(): Promise<Metadata> {
+  const title = (await getTranslations("panel"))("title");
+  return { title: { default: title, template: `%s · ${title}` } };
+}
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   await panelSession();

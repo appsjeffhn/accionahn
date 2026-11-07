@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
@@ -9,6 +10,10 @@ import { mayChangePassword } from "./guard";
 import { SetPasswordForm } from "./set-password-form";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("setPassword"))("title") };
+}
 
 // Reached from /auth/callback right after the invitation token was verified.
 export default async function SetPasswordPage({

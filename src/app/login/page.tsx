@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { defaultNextPath, safeNextPath } from "@/lib/auth/login";
@@ -6,6 +7,10 @@ import { login } from "./actions";
 import { LoginForm } from "./login-form";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("login"))("title") };
+}
 
 // Served on both host kinds: the agency host (default next /agency) and every active
 // tenant host (default next /panel). The action re-validates next on submit.

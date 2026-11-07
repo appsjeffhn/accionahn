@@ -59,6 +59,9 @@ export function StoreForm({
     <form
       ref={ref}
       className={className ?? "store-form"}
+      // Before hydration a submit uses the HTML method: a POST keeps the customer's
+      // data out of the URL (a GET would put name, phone and address in it).
+      method="post"
       noValidate
       onSubmit={(e) => {
         e.preventDefault();

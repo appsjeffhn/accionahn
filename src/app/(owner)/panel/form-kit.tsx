@@ -58,6 +58,9 @@ export function PanelForm({
     <form
       ref={ref}
       className={className ?? "panel-form"}
+      // Before hydration a submit uses the HTML method: POST, never a GET with the
+      // fields in the URL.
+      method="post"
       noValidate
       onSubmit={(event) => {
         event.preventDefault();

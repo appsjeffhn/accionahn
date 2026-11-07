@@ -39,13 +39,14 @@ function request(query: string, tenantId: string | null = 'tenant-1'): NextReque
 // The confirm button's POST: the form fields, sent by the browser from the same host.
 function post(
   fields: Record<string, string>,
-  opts: { origin?: string | null; tenantId?: string | null } = {},
+  opts: { origin?: string | null; tenantId?: string | null; fetchSite?: string } = {},
 ): NextRequest {
   const headers = new Headers({ host: 'spezia.localhost:3000', 'content-type': 'application/x-www-form-urlencoded' })
   const tenantId = opts.tenantId === undefined ? 'tenant-1' : opts.tenantId
   if (tenantId) headers.set('x-tenant-id', tenantId)
   const origin = opts.origin === undefined ? 'http://spezia.localhost:3000' : opts.origin
   if (origin) headers.set('origin', origin)
+  if (opts.fetchSite) headers.set('sec-fetch-site', opts.fetchSite)
   return new NextRequest('http://localhost:3000/auth/callback', {
     method: 'POST',
     headers,
@@ -56,7 +57,7 @@ function post(
 function expectRedirect(res: Response, status: number) {
   expect(res.status).toBe(status)
   expect(res.headers.get('cache-control')).toBe('no-store')
-  expect(res.headers.get('referrer-policy')).toBe('no-referrer')
+  expect(res.headers.get('referrer-policy')).toBe('same-origin')
 }
 
 beforeEach(() => {
@@ -71,7 +72,7 @@ describe('GET /auth/callback with an emailed token (scanner-safe)', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toMatch(/^text\/html/)
     expect(res.headers.get('cache-control')).toBe('no-store')
-    expect(res.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(res.headers.get('referrer-policy')).toBe('same-origin')
     expect(res.headers.get('x-robots-tag')).toMatch(/noindex/)
     expect(res.headers.get('set-cookie')).toBeNull()
     expect(auth.verifyOtp).not.toHaveBeenCalled()
@@ -128,6 +129,40 @@ describe('POST /auth/callback (the confirm button)', () => {
     expect(auth.verifyOtp).not.toHaveBeenCalled()
   })
 
+  it('a browser form POST from the confirm page (Origin = the tenant host, same-origin) verifies the token', async () => {
+    const res = await POST(post({ token_hash: 'abc', type: 'invite' }, { fetchSite: 'same-origin' }))
+    expect(res.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ type: 'invite', token_hash: 'abc' })
+  })
+
+  it('refuses Origin: null (opaque origin: sandboxed frame, data: URL, privacy-stripped) without using the token', async () => {
+    for (const fetchSite of [undefined, 'same-origin', 'cross-site']) {
+      const res = await POST(post({ token_hash: 'abc', type: 'invite' }, { origin: 'null', fetchSite }))
+      expect(res.headers.get('location')).toBe('/login?error=link')
+    }
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('refuses a cross-site or same-site (another tenant subdomain) POST, with or without Origin', async () => {
+    const cases: { origin: string | null; fetchSite?: string }[] = [
+      { origin: 'https://evil.example', fetchSite: 'cross-site' },
+      { origin: null, fetchSite: 'cross-site' },
+      { origin: 'http://demo2.localhost:3000', fetchSite: 'same-site' },
+      { origin: null, fetchSite: 'same-site' },
+      { origin: 'http://spezia.localhost:3000', fetchSite: 'cross-site' },
+    ]
+    for (const c of cases) {
+      const res = await POST(post({ token_hash: 'abc', type: 'invite' }, c))
+      expect(res.headers.get('location')).toBe('/login?error=link')
+    }
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('accepts a POST without Origin when Sec-Fetch-Site says same-origin', async () => {
+    const res = await POST(post({ token_hash: 'abc', type: 'invite' }, { origin: null, fetchSite: 'same-origin' }))
+    expect(res.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
+  })
+
   it('a POST without a token, or with a PKCE code, is refused', async () => {
     for (const fields of [{ type: 'invite' }, { code: 'xyz' }] as Record<string, string>[]) {
       const res = await POST(post(fields))
@@ -144,6 +179,33 @@ describe('POST /auth/callback (the confirm button)', () => {
       expect(res.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
     },
   )
+})
+
+describe('referrer policy of the confirm page and its responses', () => {
+  // `no-referrer` makes the browser send `Origin: null` on the confirm form's POST, which
+  // the CSRF check (rightly) refuses. `same-origin` sends the real Origin to this host and
+  // no Referer (so never the token_hash in the URL) to any other origin.
+  const SAFE = new Set(['same-origin'])
+
+  it('the confirm page lets the browser send its Origin on the same-origin POST and never leaks the URL cross-origin', async () => {
+    const res = await GET(request('token_hash=abc&type=invite'))
+    const policy = res.headers.get('referrer-policy')
+    expect(policy).not.toBe('no-referrer')
+    expect(SAFE.has(policy ?? '')).toBe(true)
+    expect(await res.text()).not.toMatch(/<meta name="referrer"[^>]*no-referrer/)
+  })
+
+  it('every redirect (GET and POST) carries the same policy', async () => {
+    auth.verifyOtp.mockResolvedValueOnce({ error: { message: 'expired' } })
+    const responses = [
+      await GET(request('type=invite')),
+      await GET(request('code=xyz')),
+      await POST(post({ token_hash: 'abc', type: 'invite' })),
+      await POST(post({ token_hash: 'abc', type: 'invite' })),
+      await POST(post({ token_hash: 'abc', type: 'invite' }, { origin: 'null' })),
+    ]
+    for (const res of responses) expect(SAFE.has(res.headers.get('referrer-policy') ?? '')).toBe(true)
+  })
 })
 
 describe('GET /auth/callback with a PKCE code', () => {

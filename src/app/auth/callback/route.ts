@@ -20,8 +20,10 @@ type Cookie = Parameters<NonNullable<CookieAdapter['setAll']>>[0][number]
 
 const SECURITY_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-store',
-  // The URL carried a one-time token; do not pass it on as a referrer.
-  'Referrer-Policy': 'no-referrer',
+  // The URL carried a one-time token: no Referer to any other origin. Not `no-referrer`:
+  // under it the browser sends `Origin: null` on the confirm form's POST, which the
+  // same-origin check below must refuse. `same-origin` keeps the real Origin on this host.
+  'Referrer-Policy': 'same-origin',
   'X-Robots-Tag': 'noindex, nofollow',
 }
 
@@ -89,9 +91,12 @@ export async function GET(request: NextRequest) {
 }
 
 // A POST from another site (login CSRF with the attacker's own token) is refused: the
-// browser's Origin (or Sec-Fetch-Site) must match the host it posted to.
+// browser's Origin must match the host it posted to. Without an Origin, Sec-Fetch-Site
+// must say same-origin (or be absent too: a client that is not a browser). `Origin: null`
+// (an opaque origin) and another tenant's subdomain (same-site) are refused.
 function sameOrigin(request: NextRequest): boolean {
-  if (request.headers.get('sec-fetch-site') === 'cross-site') return false
+  const site = request.headers.get('sec-fetch-site')
+  if (site !== null && site !== 'same-origin') return false
   const origin = request.headers.get('origin')
   if (origin === null) return true
   try {
