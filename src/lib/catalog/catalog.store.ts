@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ForbiddenError } from '../auth/session'
 import { createServiceClient } from '../supabase/service'
 import type { CatalogStore, ProductWrite, SettingsWrite } from './catalog'
+import { saveSettingsRow } from './settings-row'
 
 export function createSupabaseCatalogStore(
   supabase: SupabaseClient = createServiceClient(),
@@ -61,8 +62,7 @@ export function createSupabaseCatalogStore(
     },
 
     async saveSettings(write: SettingsWrite) {
-      const { error } = await supabase.from('store_settings').upsert({
-        tenant_id: write.tenantId,
+      await saveSettingsRow(supabase, write.tenantId, {
         shipping_mode: write.shippingMode,
         fixed_fee_minor: write.fixedFeeMinor,
         shipping_prepay: write.shippingPrepay,
@@ -72,7 +72,6 @@ export function createSupabaseCatalogStore(
         timezone: write.timezone,
         theme: write.theme,
       })
-      if (error) throw error
     },
   }
 }

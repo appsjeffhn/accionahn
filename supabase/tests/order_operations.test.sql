@@ -204,7 +204,7 @@ select lives_ok($$select public.create_order('10000000-0000-0000-0000-0000000000
                     pg_temp.line('30000000-0000-0000-0000-0000000000a1', 1, 0, pg_temp.snap(0, 'percent', 30, null, true))))$$,
   'pending_quote order with two unpriced lines');
 select throws_ok($$select public.set_quoted_price('10000000-0000-0000-0000-00000000000a', pg_temp.oid('quote5'), 1000, 'owner:00000000-0000-0000-0000-0000000000a1')$$,
-  '22023', null, 'a single price for several unpriced lines is refused');
+  'P0001', 'multiple_unpriced_lines', 'a single price for several unpriced lines is refused');
 select is((select (status, total_minor)::text from orders where id = pg_temp.oid('quote5')), '(pending_quote,)', 'quote5 unchanged');
 
 -- approval shipping: quote first (-> pending_shipping), then the fee

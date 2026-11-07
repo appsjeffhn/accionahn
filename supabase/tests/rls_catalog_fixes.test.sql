@@ -69,10 +69,11 @@ select is((select count(*) from product_variants where product_id = '20000000-00
 
 -- a foreign variant id raises and moves nothing
 select throws_ok($$select public.save_product('10000000-0000-0000-0000-00000000000a',
-    '{"id":"20000000-0000-0000-0000-0000000000a1","kind":"simple","reservable":false,"name":{"es":"N2","en":"N2"},"description":{"es":"","en":""},"price_minor":950,"fixed_prices":{},"configurable":null,"deposit":{"kind":"none","value":0},"images":[],"active":true}'::jsonb,
+    '{"id":"20000000-0000-0000-0000-0000000000a1","kind":"simple","reservable":false,"name":{"es":"N2","en":"N2"},"description":{"es":"","en":""},"price_minor":999,"fixed_prices":{},"configurable":null,"deposit":{"kind":"none","value":0},"images":[],"active":true}'::jsonb,
     '[{"id":"30000000-0000-0000-0000-00000000000b","label":{"es":"stolen","en":"stolen"},"sku":null,"stock":0,"active":true}]'::jsonb)$$, '42501', null, 'foreign variant id raises');
 select is((select tenant_id::text || '/' || product_id::text || '/' || stock::text || '/' || (label->>'es') from product_variants where id = '30000000-0000-0000-0000-00000000000b'),
   '10000000-0000-0000-0000-00000000000b/20000000-0000-0000-0000-00000000000b/7/B', 'tenant B variant unchanged');
+-- the failing call sent price_minor 999 (product written before the variant check raised): still 950
 select is((select price_minor from products where id = '20000000-0000-0000-0000-0000000000a1'), 950, 'failed save rolled back the product write');
 
 -- a variant id that belongs to another product of the same tenant also raises
@@ -97,14 +98,14 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","r
 select throws_ok($$select public.save_product('10000000-0000-0000-0000-00000000000a', '{}'::jsonb, null)$$, '42501', null, 'authenticated cannot call save_product');
 
 -- cross-tenant UPDATE and DELETE as owner A change nothing; tenant_id is immutable
-update product_variants set stock = 0 where tenant_id = '10000000-0000-0000-0000-00000000000b';
+update product_variants set active = false where tenant_id = '10000000-0000-0000-0000-00000000000b';
 update date_rules set value = 99 where tenant_id = '10000000-0000-0000-0000-00000000000b';
 delete from product_variants where tenant_id = '10000000-0000-0000-0000-00000000000b';
 delete from date_rules where tenant_id = '10000000-0000-0000-0000-00000000000b';
 select throws_ok($$update date_rules set tenant_id = '10000000-0000-0000-0000-00000000000b' where id = '40000000-0000-0000-0000-00000000000a'$$, '42501', null, 'owner cannot change date_rules.tenant_id');
 select throws_ok($$update shipping_zones set tenant_id = '10000000-0000-0000-0000-00000000000b' where id = '50000000-0000-0000-0000-00000000000a'$$, '42501', null, 'owner cannot change shipping_zones.tenant_id');
 reset role;
-select is((select stock from product_variants where id = '30000000-0000-0000-0000-00000000000b'), 7, 'B variant not updated or deleted by owner A');
+select is((select (stock, active)::text from product_variants where id = '30000000-0000-0000-0000-00000000000b'), '(7,t)', 'B variant not updated or deleted by owner A');
 select is((select value from date_rules where id = '40000000-0000-0000-0000-00000000000b'), 500::numeric, 'B date rule not updated or deleted by owner A');
 
 set local role anon;
