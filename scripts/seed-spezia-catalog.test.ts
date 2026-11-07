@@ -7,6 +7,7 @@ import {
   shippingZoneInputSchema,
   storeSettingsInputSchema,
 } from '../src/lib/catalog/schema'
+import { listAvailableSlots, type CalendarStore } from '../src/lib/calendar/calendar'
 import { computeQuote } from '../src/lib/pricing/engine'
 import type { QuoteInput } from '../src/lib/pricing/types'
 import { productCalendarInputSchema, workingHoursInputSchema } from '../src/lib/store/schema'
@@ -81,6 +82,35 @@ describe('SPEZIA_CATALOG', () => {
       expect(p.variants?.length).toBeGreaterThanOrEqual(2)
       for (const v of p.variants ?? []) expect(typeof v.stock).toBe('number')
     }
+  })
+
+  it('the taqueada slots are service starts: 09:00 (prep from 08:00) to 18:00 (service until 20:00)', async () => {
+    const t = taqueada()
+    const cal = SPEZIA_CATALOG.productCalendars[0]
+    const day = '2026-11-13' // a Friday a week ahead, inside notice and max days
+    const store: CalendarStore = {
+      loadDay: async () => ({
+        timezone: SPEZIA_CATALOG.settings.timezone,
+        calendar: {
+          prepMinutes: cal.prepMinutes,
+          serviceMinutes: cal.serviceMinutes,
+          bufferMinutes: cal.bufferMinutes,
+          dailyLimit: cal.dailyLimit ?? null,
+          slotStepMinutes: cal.slotStepMinutes,
+          minNoticeHours: cal.minNoticeHours,
+          maxDaysAhead: cal.maxDaysAhead,
+        },
+        resources: [],
+        hours: SPEZIA_CATALOG.workingHours.map((h) => ({ resourceId: null, weekday: h.weekday, opens: h.opens, closes: h.closes })),
+        closed: [],
+        bookings: [],
+      }),
+    }
+    const slots = await listAvailableSlots(TENANT, t.id, day, undefined, { store, now: () => new Date('2026-11-06T12:00:00Z') })
+    const local = (hhmm: string) => new Date(`${day}T${hhmm}:00-06:00`).toISOString()
+    expect(slots[0].start).toBe(local('09:00'))
+    expect(slots.at(-1)?.start).toBe(local('18:00'))
+    expect(slots).toHaveLength(19)
   })
 
   it(`marks every example price, label and instruction with ${EXAMPLE_MARK}`, () => {

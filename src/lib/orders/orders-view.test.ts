@@ -7,6 +7,8 @@ import {
   breakdown,
   lineText,
   orderActions,
+  prepStart,
+  formatClock,
   unpricedLines,
   parseAmountForm,
   parseReasonForm,
@@ -218,6 +220,28 @@ describe('breakdown', () => {
     const b = breakdown({ ...base, currency: 'USD', baseCurrency: 'HNL', shippingFeeMinor: 5000 }, 'en')
     expect(b.shipping).toBe(new Intl.NumberFormat('en', { style: 'currency', currency: 'HNL' }).format(50))
     expect(b.total).toBe('to be confirmed')
+  })
+})
+
+describe('prepStart / formatClock: preparation before the service start', () => {
+  const cake = '00000000-0000-4000-8000-0000000000c1'
+  const other = '00000000-0000-4000-8000-0000000000c2'
+  // picked 10:00 local (16:00Z), 60 min prep: book_slot stored 09:00-12:00 local
+  const booking = { productId: cake, start: '2099-03-02T15:00:00.000Z', end: '2099-03-02T18:00:00.000Z' }
+
+  it('is the start of the booking that holds the line start, shown as HH:MM in the store timezone', () => {
+    const at = prepStart({ productId: cake, start: '2099-03-02T16:00:00.000Z' }, [booking])
+    expect(at).toBe('2099-03-02T15:00:00.000Z')
+    expect(formatClock(at!, 'es', 'America/Tegucigalpa')).toBe('09:00')
+    expect(formatClock(at!, 'en', 'America/Tegucigalpa')).toBe('09:00')
+  })
+
+  it('is null without preparation: no booking, another product, prep 0 or an old-rule range [S, ...)', () => {
+    expect(prepStart({ productId: cake, start: '2099-03-02T16:00:00.000Z' }, [])).toBeNull()
+    expect(prepStart({ productId: other, start: '2099-03-02T16:00:00.000Z' }, [booking])).toBeNull()
+    expect(prepStart({ productId: cake, start: '2099-03-02T15:00:00.000Z' }, [booking])).toBeNull()
+    expect(prepStart({ productId: cake, start: null }, [booking])).toBeNull()
+    expect(prepStart({ productId: cake, start: '2099-03-02T19:00:00.000Z' }, [booking])).toBeNull()
   })
 })
 

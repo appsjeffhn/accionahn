@@ -78,6 +78,29 @@ export function formatWhen(iso: string, locale: PanelLocale, timeZone?: string):
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(new Date(iso))
 }
 
+// HH:MM (24 h) in the store timezone.
+export function formatClock(iso: string, locale: PanelLocale, timeZone?: string): string {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(iso))
+}
+
+export type BookingRange = { productId: string; start: string; end: string }
+
+// When the team starts preparing for a reservable line: the start of the order's booking
+// of that product that holds the line's service start strictly inside it (book_slot stores
+// [start - prep, start + service + buffer)). null without a booking, with no preparation,
+// or for a booking stored under the old rule ([start, ...), no preparation before it).
+export function prepStart(
+  line: { productId?: string; start?: string | null },
+  bookings: BookingRange[],
+): string | null {
+  if (!line.start || !line.productId) return null
+  const at = Date.parse(line.start)
+  const b = bookings.find(
+    (x) => x.productId === line.productId && Date.parse(x.start) < at && at < Date.parse(x.end),
+  )
+  return b ? b.start : null
+}
+
 export function toOrderRow(
   order: OrderSummary,
   locale: PanelLocale,

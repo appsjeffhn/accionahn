@@ -41,6 +41,7 @@ function detail(id: string, tenantId: string, over: Partial<PanelOrderDetail> = 
     lines: [],
     events: [],
     proofs: [],
+    bookings: [],
     ...over,
   }
 }

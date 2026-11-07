@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { parseRange } from '../calendar/calendar.store'
 import type { OrderSummary } from './orders-view'
 import { PANEL_ORDERS_LIMIT, type PanelOrderDetail, type PanelOrdersStore, type ProofStatus } from './panel-orders'
 import type { OrderStatus } from './states'
@@ -92,7 +93,7 @@ export function createSupabasePanelOrdersStore(supabase: SupabaseClient): PanelO
       if (error) throw error
       if (!data) return null
       const o = data as unknown as Row
-      const [lines, events, proofs] = await Promise.all([
+      const [lines, events, proofs, bookings] = await Promise.all([
         rows(
           supabase
             .from('order_lines')
@@ -116,6 +117,13 @@ export function createSupabasePanelOrdersStore(supabase: SupabaseClient): PanelO
             .eq('tenant_id', tenantId)
             .eq('order_id', orderId)
             .order('created_at'),
+        ),
+        rows(
+          supabase
+            .from('bookings')
+            .select('product_id, during')
+            .eq('tenant_id', tenantId)
+            .eq('order_id', orderId),
         ),
       ])
       const detail: PanelOrderDetail = {
@@ -156,6 +164,7 @@ export function createSupabasePanelOrdersStore(supabase: SupabaseClient): PanelO
           reason: (p.reason as string | null) ?? null,
           createdAt: String(p.created_at),
         })),
+        bookings: bookings.map((b) => ({ productId: String(b.product_id), ...parseRange(String(b.during)) })),
       }
       return detail
     },

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { ForbiddenError, type Session } from '../auth/session'
 import type { FileStore } from '../storage/file-store'
 import type { OrderLineSnapshot } from './orders'
-import { PROOF_URL_SECONDS, proofPathMatches, type OrderSummary } from './orders-view'
+import { PROOF_URL_SECONDS, proofPathMatches, type BookingRange, type OrderSummary } from './orders-view'
 import type { OrderStatus } from './states'
 
 // Owner panel reads of orders. Reads go through the owner's own client (RLS: owners
@@ -35,6 +35,8 @@ export type PanelOrderDetail = {
   lines: { position: number; qty: number; totalMinor: number; snapshot: Partial<OrderLineSnapshot> }[]
   events: { fromStatus: string | null; toStatus: string; actor: string; reason: string | null; at: string }[]
   proofs: { id: string; path: string; contentType: string; status: ProofStatus; reason: string | null; createdAt: string }[]
+  // the order's slot bookings (any status), to show when preparation starts
+  bookings: BookingRange[]
 }
 
 export type SignedProof = Omit<PanelOrderDetail['proofs'][number], 'path'> & { url: string | null }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { canCheckout, cartIssues, quoteForDisplay } from "@/lib/cart/cart";
-import { listAvailableSlots } from "@/lib/calendar/calendar";
+import { listDaySlots } from "@/lib/calendar/calendar";
 import { formatMoney } from "@/lib/pricing/money";
 import { inputFields } from "@/lib/store/checkout";
 import { addDays, commonStarts, dayParam, formatDay, formatTime, isUuid, localized, todayIn } from "@/lib/store/view";
@@ -48,9 +48,11 @@ export default async function CheckoutPage({
   const today = todayIn(settings.timezone);
   const dayRaw = dayParam(query.day);
   const day = needsOrderSlot && dayRaw && dayRaw >= today ? dayRaw : null;
-  const starts = day
-    ? commonStarts(await Promise.all(reservableIds.map((id) => listAvailableSlots(ctx.tenantId, id, day))))
-    : [];
+  const listed = day ? await Promise.all(reservableIds.map((id) => listDaySlots(ctx.tenantId, id, day))) : [];
+  const starts = day ? commonStarts(listed.map((l) => l.slots)) : [];
+  // "our team arrives N min earlier": only when every reservable product shares one prep time
+  const preps = [...new Set(listed.map((l) => l.prepMinutes))];
+  const prepHint = preps.length === 1 && preps[0] > 0 ? preps[0] : null;
 
   const quote = quoteForDisplay(cart, catalog, {
     baseCurrency: tenant.baseCurrency,
@@ -137,6 +139,9 @@ export default async function CheckoutPage({
                 ))}
               </ul>
             </RadioGroupError>
+          )}
+          {needsOrderSlot && day && prepHint !== null && (
+            <p className="store-hint">{t("slots.prepHint", { prep: prepHint })}</p>
           )}
           <TextField name="name" label={t("fields.name")} required autoComplete="name" />
           <TextField name="phone" label={t("fields.phone")} type="tel" required autoComplete="tel" inputMode="tel" hint={t("fields.phoneHint")} />
