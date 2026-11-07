@@ -426,6 +426,29 @@ describe('createOrder: stock and slots, all or nothing', () => {
     expect(state.creates).toBe(0)
   })
 
+  it('the start is the arrival time: preparation must fit after opening, the service before closing', async () => {
+    const { state, deps } = world()
+    const base = deps.calendar!
+    const spezia: CalendarStore = {
+      loadDay: async (...args) => {
+        const day = await base.loadDay(...args)
+        return { ...day, calendar: { ...day.calendar!, prepMinutes: 60, serviceMinutes: 120 } }
+      },
+    }
+    const cake = { ...pickles, lines: [{ lineId: 'cake', productId: P_CAKE, qty: 1 }] }
+    const withSpezia = { ...deps, calendar: spezia }
+    // opening 08:00: an 08:30 arrival needs preparation from 07:30
+    await expect(createOrder(TENANT, { ...cake, start: at('08:30') }, withSpezia)).rejects.toBeInstanceOf(SlotTakenError)
+    // closing 20:00: an 18:30 arrival serves until 20:30
+    await expect(createOrder(TENANT, { ...cake, start: at('18:30') }, withSpezia)).rejects.toBeInstanceOf(SlotTakenError)
+    expect(state.creates).toBe(0)
+    await createOrder(TENANT, { ...cake, start: at('09:00') }, withSpezia)
+    // the order keeps the picked arrival time, not the start of preparation
+    expect(state.orders[0].lines[0].start).toBe(at('09:00'))
+    await createOrder(TENANT, { ...cake, start: at('18:00') }, withSpezia)
+    expect(state.orders).toHaveLength(2)
+  })
+
   it('a day at its daily limit refuses with DailyLimitError, not SlotTakenError', async () => {
     const { state, deps } = world()
     const base = deps.calendar!

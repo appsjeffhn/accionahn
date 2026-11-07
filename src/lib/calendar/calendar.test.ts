@@ -36,27 +36,44 @@ const list = (day: CalendarDay, resourceId?: string, now = NOW) =>
   listAvailableSlots('A', 'cake', DAY, resourceId, { store: storeFor(day), now })
 
 describe('listAvailableSlots', () => {
-  it('Spezia: 60 + 120 min in 30 min steps, 8:00-20:00, never ends after closing nor overlaps a booking', async () => {
-    // booked 14:00-17:00 local = 20:00Z-23:00Z
+  it('Spezia: the start is the arrival time; 60 min prep before it, 120 min service after, 8:00-20:00', async () => {
+    // occupied 14:00-17:00 local = 20:00Z-23:00Z
     const day = spezia({
       bookings: [{ resourceId: 'r1', productId: 'other', start: '2099-03-02T20:00:00Z', end: '2099-03-02T23:00:00Z' }],
     })
     const slots = await list(day)
     expect(slots.map((s) => s.start)).toEqual([
-      '2099-03-02T14:00:00.000Z', // 08:00 local
-      '2099-03-02T14:30:00.000Z',
-      '2099-03-02T15:00:00.000Z',
+      '2099-03-02T15:00:00.000Z', // 09:00 local: prep from 08:00, at opening
       '2099-03-02T15:30:00.000Z',
       '2099-03-02T16:00:00.000Z',
       '2099-03-02T16:30:00.000Z',
-      '2099-03-02T17:00:00.000Z', // 11:00 local, ends 14:00 when the booking starts
-      '2099-03-02T23:00:00.000Z', // 17:00 local, ends exactly at 20:00
+      '2099-03-02T17:00:00.000Z',
+      '2099-03-02T17:30:00.000Z',
+      '2099-03-02T18:00:00.000Z', // 12:00 local: service ends 14:00 when the booking starts
+      '2099-03-03T00:00:00.000Z', // 18:00 local: prep from 17:00, service ends exactly at 20:00
     ])
+    const opening = Date.parse('2099-03-02T14:00:00Z') // 08:00 local
     const closing = Date.parse('2099-03-03T02:00:00Z') // 20:00 local
     for (const s of slots) {
-      expect(Date.parse(s.start) + 180 * 60_000).toBeLessThanOrEqual(closing)
+      expect(Date.parse(s.start) - 60 * 60_000).toBeGreaterThanOrEqual(opening)
+      expect(Date.parse(s.start) + 120 * 60_000).toBeLessThanOrEqual(closing)
       expect(s.resourceIds).toEqual(['r1'])
     }
+  })
+
+  it('a booking picked at 10:00 occupies 09:00-12:00: 12:00 is not offered, 13:00 is', async () => {
+    const local = (hhmm: string) => new Date(`${DAY}T${hhmm}:00-06:00`).toISOString()
+    // the range book_slot stores for a 10:00 pick
+    const day = spezia({
+      bookings: [{ resourceId: 'r1', productId: 'cake', start: local('09:00'), end: local('12:00') }],
+    })
+    const starts = (await list(day)).map((s) => s.start)
+    expect(starts).not.toContain(local('08:30'))
+    expect(starts).not.toContain(local('10:00'))
+    expect(starts).not.toContain(local('12:00')) // prep from 11:00 overlaps
+    expect(starts).toContain(local('13:00')) // prep from 12:00
+    expect(starts).toContain(local('18:00'))
+    expect(starts).not.toContain(local('18:30')) // service would end 20:30
   })
 
   it('uses the store timezone, including daylight saving time', async () => {
@@ -77,8 +94,11 @@ describe('listAvailableSlots', () => {
       bookings: [{ resourceId: 'r1', productId: 'other', start: '2099-03-02T20:00:00Z', end: '2099-03-02T23:00:00Z' }],
     })
     const starts = (await list(day)).map((s) => s.start)
-    expect(starts).not.toContain('2099-03-02T17:00:00.000Z')
-    expect(starts).toContain('2099-03-02T16:30:00.000Z')
+    // 11:30 local: occupied 10:30-14:00 with the buffer; 12:00 would run to 14:30
+    expect(starts).not.toContain('2099-03-02T18:00:00.000Z')
+    expect(starts).toContain('2099-03-02T17:30:00.000Z')
+    // the buffer only keeps the next booking away: it may run past closing (18:00 local)
+    expect(starts).toContain('2099-03-03T00:00:00.000Z')
   })
 
   it('lists every free resource that offers the product, and can be limited to one', async () => {
@@ -91,11 +111,12 @@ describe('listAvailableSlots', () => {
       bookings: [{ resourceId: 'r1', productId: 'x', start: '2099-03-02T14:00:00Z', end: '2099-03-02T17:00:00Z' }],
     })
     const slots = await list(day)
-    expect(slots[0]).toEqual({ start: '2099-03-02T14:00:00.000Z', resourceIds: ['r2'] })
-    expect(slots.find((s) => s.start === '2099-03-02T17:00:00.000Z')?.resourceIds).toEqual(['r1', 'r2'])
+    // r1 is busy 08:00-11:00 local; the first pick (09:00) needs prep from 08:00
+    expect(slots[0]).toEqual({ start: '2099-03-02T15:00:00.000Z', resourceIds: ['r2'] })
+    expect(slots.find((s) => s.start === '2099-03-02T18:00:00.000Z')?.resourceIds).toEqual(['r1', 'r2'])
     expect(slots.every((s) => !s.resourceIds.includes('r3'))).toBe(true)
     const onlyR1 = await list(day, 'r1')
-    expect(onlyR1[0].start).toBe('2099-03-02T17:00:00.000Z')
+    expect(onlyR1[0].start).toBe('2099-03-02T18:00:00.000Z')
     expect(onlyR1.every((s) => s.resourceIds.length === 1 && s.resourceIds[0] === 'r1')).toBe(true)
   })
 
@@ -134,16 +155,17 @@ describe('listAvailableSlots', () => {
 
   it('honours min notice and max days ahead', async () => {
     const day = spezia({ calendar: { ...spezia().calendar!, minNoticeHours: 2 } })
-    // now = 09:00 local; first start allowed is 11:00 local
+    // now = 09:00 local; preparation may start at 11:00 local at the earliest, so the
+    // first arrival time is 12:00 local
     const slots = await list(day, undefined, () => new Date('2099-03-02T15:00:00Z'))
-    expect(slots[0].start).toBe('2099-03-02T17:00:00.000Z')
+    expect(slots[0].start).toBe('2099-03-02T18:00:00.000Z')
     const far = spezia({ calendar: { ...spezia().calendar!, maxDaysAhead: 180 } })
     expect(await list(far)).toEqual([])
   })
 
   it('a tenant without resources gets slots for the implicit default resource', async () => {
     const slots = await list(spezia({ resources: [] }))
-    expect(slots.length).toBe(19) // 08:00 to 17:00 every 30 minutes
+    expect(slots.length).toBe(19) // 09:00 to 18:00 every 30 minutes
     expect(slots[0].resourceIds).toEqual([])
   })
 
@@ -186,7 +208,7 @@ describe('listDaySlots: why a day has no slots', () => {
 describe('listAvailableSlots: touching or overlapping hour rows form one window', () => {
   const local = (hhmm: string) => new Date(`${DAY}T${hhmm}:00-06:00`).toISOString()
 
-  it('05:00-08:00 next to 08:00-20:00 offers every start from 05:00 to 17:00 (3 h blocks)', async () => {
+  it('05:00-08:00 next to 08:00-20:00 offers every start from 06:00 to 18:00 (1 h prep before)', async () => {
     const day = spezia({
       hours: [
         { resourceId: null, weekday: 1, opens: '05:00:00', closes: '08:00:00' },
@@ -195,7 +217,7 @@ describe('listAvailableSlots: touching or overlapping hour rows form one window'
     })
     const starts = (await list(day)).map((s) => s.start)
     const expected: string[] = []
-    for (let m = 5 * 60; m <= 17 * 60; m += 30) {
+    for (let m = 6 * 60; m <= 18 * 60; m += 30) {
       expected.push(local(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`))
     }
     expect(starts).toEqual(expected)
@@ -209,9 +231,9 @@ describe('listAvailableSlots: touching or overlapping hour rows form one window'
       ],
     })
     const o = (await list(overlap)).map((s) => s.start)
-    expect(o[0]).toBe(local('06:00'))
-    expect(o).toContain(local('07:30'))
-    expect(o.at(-1)).toBe(local('09:00'))
+    expect(o[0]).toBe(local('07:00'))
+    expect(o).toContain(local('08:30'))
+    expect(o.at(-1)).toBe(local('10:00'))
 
     const gap = spezia({
       hours: [
@@ -220,7 +242,7 @@ describe('listAvailableSlots: touching or overlapping hour rows form one window'
       ],
     })
     const g = (await list(gap)).map((s) => s.start)
-    expect(g).toEqual([local('05:00'), local('08:30'), local('09:00')])
+    expect(g).toEqual([local('06:00'), local('09:30'), local('10:00')])
   })
 
   it('keeps the grid of each row: a row opening off the hour still offers its own starts', async () => {
@@ -232,7 +254,8 @@ describe('listAvailableSlots: touching or overlapping hour rows form one window'
     })
     const starts = (await list(day)).map((s) => s.start)
     expect(starts).toContain(local('08:00'))
-    expect(starts).toContain(local('05:45'))
-    expect(starts).toContain(local('17:00'))
+    expect(starts).toContain(local('06:45'))
+    expect(starts).not.toContain(local('05:45'))
+    expect(starts).toContain(local('18:00'))
   })
 })

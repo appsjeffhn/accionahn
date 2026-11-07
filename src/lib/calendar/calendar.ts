@@ -124,18 +124,19 @@ function daysBetween(from: string, to: string): number {
 // Opening windows of one day: rows that touch or overlap (05:00-08:00 and 08:00-20:00)
 // form one window, as book_slot sees them. Each row keeps its own opening as the start of
 // its slot grid, so merging only adds starts, never moves existing ones.
-function hourWindows(rows: { opens: string; closes: string }[]): { grids: number[]; closes: number }[] {
+type HourWindow = { opens: number; grids: number[]; closes: number }
+function hourWindows(rows: { opens: string; closes: string }[]): HourWindow[] {
   const sorted = rows
     .map((h) => ({ opens: minutesOf(h.opens), closes: minutesOf(h.closes) }))
     .sort((a, b) => a.opens - b.opens || a.closes - b.closes)
-  const windows: { grids: number[]; closes: number }[] = []
+  const windows: HourWindow[] = []
   for (const r of sorted) {
     const last = windows.at(-1)
     if (last && r.opens <= last.closes) {
       last.grids.push(r.opens)
       last.closes = Math.max(last.closes, r.closes)
     } else {
-      windows.push({ grids: [r.opens], closes: r.closes })
+      windows.push({ opens: r.opens, grids: [r.opens], closes: r.closes })
     }
   }
   return windows
@@ -148,6 +149,10 @@ export type DaySlots = {
 }
 
 // Free starts of `day` for the product, each with the resources that could take it.
+// A start is the time the customer picks: the start of service, when the team arrives.
+// Preparation runs before it, so a start S occupies [S - prep, S + service + buffer);
+// opening hours must hold [S - prep, S + service] (the buffer may run past closing),
+// min notice counts from S - prep, and the day, daily limit and max days are those of S.
 // resourceIds is empty for a tenant without resources (book_slot then creates the
 // implicit default resource; book with resourceId null).
 export async function listAvailableSlots(
@@ -181,6 +186,8 @@ export async function listDaySlots(
   if (data.closed.some((c) => c.resourceId === null && c.day === day)) return none
 
   if (cal.dailyLimit !== null) {
+    // a booking's stored start is its start of preparation; it lies inside the opening
+    // hours of the picked day, so its local day is the day of the picked start (as in book_slot)
     const used = data.bookings.filter(
       (b) => b.productId === productId && localDay(Date.parse(b.start), tz) === day,
     ).length
@@ -199,8 +206,9 @@ export async function listDaySlots(
       )
 
   const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
-  const work = cal.prepMinutes + cal.serviceMinutes
-  const occupied = (work + cal.bufferMinutes) * MINUTE
+  const prep = cal.prepMinutes
+  const before = prep * MINUTE
+  const after = (cal.serviceMinutes + cal.bufferMinutes) * MINUTE
   const earliest = now + cal.minNoticeHours * 60 * MINUTE
   const byStart = new Map<number, string[]>()
 
@@ -215,11 +223,13 @@ export async function listDaySlots(
 
     for (const w of hourWindows(hours)) {
       for (const opens of w.grids) {
-        for (let s = opens; s + work <= w.closes; s += cal.slotStepMinutes) {
+        for (let s = opens; s + cal.serviceMinutes <= w.closes; s += cal.slotStepMinutes) {
+          if (s - prep < w.opens) continue
           const start = zonedToUtc(day, s, tz)
-          if (start < earliest) continue
-          const end = start + occupied
-          if (busy.some(([bs, be]) => start < be && end > bs)) continue
+          const from = start - before
+          if (from < earliest) continue
+          const to = start + after
+          if (busy.some(([bs, be]) => from < be && to > bs)) continue
           const ids = byStart.get(start) ?? []
           if (r.id !== '' && !ids.includes(r.id)) ids.push(r.id)
           byStart.set(start, ids)
