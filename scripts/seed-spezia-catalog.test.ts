@@ -146,6 +146,13 @@ describe('SPEZIA_CATALOG', () => {
     // 50 % of the line; shipping is not prepaid
     expect(q.depositDueMinor).toBe(240_625)
     expect(q.dueOnDeliveryMinor).toBe(255_625)
+
+    // 2026-12-24 (a Thursday): the fixed 500.00 holiday rule, charged once, no weekend percent
+    const xmas = computeQuote({ ...input, orderDate: '2026-12-24', shippingFeeMinor: 15_000 })
+    expect(xmas.errors).toEqual([])
+    expect(xmas.lines[0]).toMatchObject({ baseMinor: 412_500, extrasMinor: 25_000, dateMinor: 50_000, totalMinor: 487_500 })
+    expect(xmas.totalMinor).toBe(502_500)
+    expect(xmas.depositDueMinor).toBe(243_750)
   })
 })
 
@@ -227,7 +234,7 @@ function fakeStores() {
     hours: db.hours.length,
     calendars: db.calendars.length,
   })
-  return { catalog, setup, counts, writes: () => writes }
+  return { db, catalog, setup, counts, writes: () => writes }
 }
 
 describe('seedSpeziaCatalog', () => {
@@ -262,6 +269,34 @@ describe('seedSpeziaCatalog', () => {
     expect(f.counts().hours).toBe(1)
     expect(result.created.settings).toBe(0)
     expect(result.created.workingHours).toBe(0)
+  })
+
+  it('leaves owner-edited rows that carry a seeded id untouched (product, zone, rule, calendar)', async () => {
+    const f = fakeStores()
+    await seedSpeziaCatalog(TENANT, { env: LOCAL_ENV, catalog: f.catalog, setup: f.setup })
+    // the owner edits the seeded rows in the panel
+    const product = f.db.products.find((p) => p.id === SPEZIA_CATALOG.products[0].id)!
+    product.name = 'Taqueada (precio real)'
+    const zone = f.db.zones.find((z) => z.id === SPEZIA_CATALOG.zones[0].id)!
+    zone.fee_minor = 12_345
+    const rule = f.db.dateRules.find((r) => r.id === SPEZIA_CATALOG.dateRules[0].id)!
+    rule.value = 15
+    f.db.calendars[0] = { ...f.db.calendars[0], prepMinutes: 0, serviceMinutes: 240 }
+    const snapshot = structuredClone({ ...f.db })
+    const writes = f.writes()
+
+    await seedSpeziaCatalog(TENANT, { env: LOCAL_ENV, catalog: f.catalog, setup: f.setup })
+    expect(f.writes()).toBe(writes)
+    expect(structuredClone({ ...f.db })).toEqual(snapshot)
+  })
+
+  it('recreates a seeded row the owner deleted (documented in the seed header)', async () => {
+    const f = fakeStores()
+    await seedSpeziaCatalog(TENANT, { env: LOCAL_ENV, catalog: f.catalog, setup: f.setup })
+    f.db.zones.splice(0, 1)
+    const result = await seedSpeziaCatalog(TENANT, { env: LOCAL_ENV, catalog: f.catalog, setup: f.setup })
+    expect(result.created.zones).toBe(1)
+    expect(f.db.zones).toHaveLength(SPEZIA_CATALOG.zones.length)
   })
 
   it.each([

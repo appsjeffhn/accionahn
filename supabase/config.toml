@@ -160,7 +160,8 @@ enabled = true
 site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
-# A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
+# URLs that auth providers may redirect to after authentication: exact URLs or glob
+# patterns (`*` matches one host label), as used below.
 # The tenant hosts' /auth/callback is where owner invitations land (local dev port 3000).
 # *.localhost: ROOT_DOMAIN=localhost, tenant hosts like spezia.localhost need no hosts file.
 additional_redirect_urls = ["https://127.0.0.1:3000", "http://*.accionahn.com:3000/auth/callback", "http://*.localhost:3000/auth/callback"]

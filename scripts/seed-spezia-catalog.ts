@@ -6,6 +6,9 @@
 // Idempotent and conservative: a row is written only when it does not exist yet (by its
 // fixed id, or for settings and opening hours, when the tenant has none), so running the
 // seed again never duplicates rows and never overwrites what the owner already changed.
+// The flip side: a seeded row the owner DELETED (a product, zone, date rule or the
+// taqueada calendar row) is recreated by a later run, with its EJEMPLO values. On staging,
+// run the seed once; do not re-run it after the owner has cleaned up the example data.
 import type { CatalogStore } from '../src/lib/catalog/catalog'
 import {
   dateRuleInputSchema,

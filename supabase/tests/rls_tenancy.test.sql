@@ -42,7 +42,10 @@ select throws_ok('select count(*) from tenants', '42501', null, 'anon has no acc
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
-select is((select count(*)::int from tenants), 2, 'agency admin sees both tenants');
+-- counted over this test's own tenants, so rows already in the database do not matter
+select is((select count(*)::int from tenants
+  where id in ('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000b')),
+  2, 'agency admin sees both tenants');
 
 -- unique membership (as superuser)
 reset role;

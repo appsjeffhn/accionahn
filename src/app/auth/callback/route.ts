@@ -27,7 +27,11 @@ export async function GET(request: NextRequest) {
     if (!error) target = plan.then
   }
 
-  const response = NextResponse.redirect(new URL(target, request.nextUrl.origin))
+  // Relative Location: the browser resolves it against the host it asked, so the
+  // redirect never leaves the tenant host. (Under `next start` request.nextUrl.origin
+  // is the server's own hostname, not the tenant host.) `target` is a same-origin path
+  // restricted by planCallback/safeNextPath.
+  const response = new NextResponse(null, { status: 307, headers: { Location: target } })
   written.forEach(({ name, value, options }) =>
     response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]),
   )

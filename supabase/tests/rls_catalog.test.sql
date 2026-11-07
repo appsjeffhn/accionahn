@@ -106,7 +106,10 @@ select is((select count(*) from shipping_zones where tenant_id = '10000000-0000-
 -- agency admin
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
-select is((select count(*) from products), 3::bigint, 'admin sees products of every tenant');
+-- counted over this test's own tenants, so rows already in the database do not matter
+select is((select count(*) from products
+  where tenant_id in ('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000b')),
+  3::bigint, 'admin sees products of every tenant');
 update store_settings set hold_hours = 48 where tenant_id = '10000000-0000-0000-0000-00000000000b';
 select is((select hold_hours from store_settings where tenant_id = '10000000-0000-0000-0000-00000000000b'), 48, 'admin updates settings of another tenant');
 select throws_ok($$update products set tenant_id = '10000000-0000-0000-0000-00000000000a' where id = '20000000-0000-0000-0000-00000000000b'$$, '42501', null, 'admin cannot change tenant_id of a product either');
