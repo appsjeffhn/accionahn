@@ -273,6 +273,8 @@ export function checkoutErrorKey(error: unknown): string {
     if (error.code === 'product_unavailable') return 'productUnavailable'
     if (error.code === 'variant_required') return 'variantRequired'
     if (error.code === 'start_required') return 'slot'
+    if (error.code === 'multiple_quote_lines') return 'multipleQuoteLines'
+    if (error.code === 'amount_too_large') return 'amountTooLarge'
     return 'invalid'
   }
   return 'failed'
@@ -311,4 +313,5 @@ export const STORE_ERROR_KEYS = [
   'too_few_options', 'too_many_included', 'unknown_option', 'invalid_people', 'duplicate_option',
   'required', 'tooLong', 'phone', 'date', 'time',
   'notAwaiting', 'expired', 'tooLarge', 'fileType', 'noFile', 'emptyCart', 'cartChanged',
+  'multipleQuoteLines', 'amountTooLarge',
 ] as const

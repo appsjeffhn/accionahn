@@ -18,29 +18,6 @@ export function createSupabaseStockStore(
   supabase: SupabaseClient = createServiceClient(),
 ): StockStore {
   return {
-    async hold(tenantId, variantId, qty, orderId) {
-      const { data, error } = await supabase.rpc('hold_stock', {
-        p_tenant: tenantId,
-        p_variant: variantId,
-        p_qty: qty,
-        p_order: orderId,
-      })
-      if (error) translate(error)
-      return data as string
-    },
-
-    async release(orderId) {
-      const { data, error } = await supabase.rpc('release_stock', { p_order: orderId })
-      if (error) translate(error)
-      return data as number
-    },
-
-    async commit(orderId) {
-      const { data, error } = await supabase.rpc('commit_stock', { p_order: orderId })
-      if (error) translate(error)
-      return data as number
-    },
-
     async adjust(tenantId, variantId, delta) {
       const { data, error } = await supabase.rpc('adjust_stock', {
         p_tenant: tenantId,

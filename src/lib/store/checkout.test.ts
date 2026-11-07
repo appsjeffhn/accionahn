@@ -233,6 +233,9 @@ describe('error mapping', () => {
     [new InvalidOrderError('product_unavailable'), 'productUnavailable'],
     [new InvalidOrderError('start_required'), 'slot'],
     [new InvalidOrderError('invalid_input'), 'invalid'],
+    [new InvalidOrderError('multiple_quote_lines'), 'multipleQuoteLines'],
+    [new InvalidOrderError('amount_too_large'), 'amountTooLarge'],
+    [new InvalidOrderError('currency_not_enabled'), 'invalid'],
     [new Error('boom'), 'failed'],
     ['weird', 'failed'],
   ])('maps %o to %s', (error, key) => {

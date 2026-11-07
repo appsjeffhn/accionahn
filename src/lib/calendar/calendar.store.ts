@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ForbiddenError } from '../auth/session'
 import { createServiceClient } from '../supabase/service'
 import {
   ClosedDateError,
@@ -13,9 +12,7 @@ import {
   type CalendarStore,
 } from './calendar'
 
-type PgError = { code?: string; message?: string }
-
-// book_slot messages (P0001) -> typed errors; also used by the orders store (create_order books slots).
+// book_slot messages (P0001) -> typed errors, for the orders store (create_order books slots).
 export const BOOKING_ERRORS: Record<string, new () => Error> = {
   slot_taken: SlotTakenError,
   daily_limit_reached: DailyLimitError,
@@ -24,15 +21,6 @@ export const BOOKING_ERRORS: Record<string, new () => Error> = {
   too_soon: TooSoonError,
   too_far: TooFarError,
   not_bookable: NotBookableError,
-}
-
-// 42501: product or resource of another tenant. P0001 is the generic raise code, so the
-// message names the booking error; anything else is rethrown untouched.
-function translate(error: PgError): never {
-  if (error.code === '42501') throw new ForbiddenError()
-  const typed = error.code === 'P0001' && error.message ? BOOKING_ERRORS[error.message] : undefined
-  if (typed) throw new typed()
-  throw error
 }
 
 // '["2099-03-02 15:00:00+00","2099-03-02 18:00:00+00")' -> ISO bounds.
@@ -110,30 +98,6 @@ export function createSupabaseCalendarStore(
         })),
       }
       return result
-    },
-
-    async book(tenantId, productId, resourceId, start, orderId) {
-      const { data, error } = await supabase.rpc('book_slot', {
-        p_tenant: tenantId,
-        p_product: productId,
-        p_resource: resourceId,
-        p_start: start,
-        p_order: orderId,
-      })
-      if (error) translate(error)
-      return data as string
-    },
-
-    async release(orderId) {
-      const { data, error } = await supabase.rpc('release_booking', { p_order: orderId })
-      if (error) translate(error)
-      return data as number
-    },
-
-    async confirm(orderId) {
-      const { data, error } = await supabase.rpc('confirm_booking', { p_order: orderId })
-      if (error) translate(error)
-      return data as number
     },
   }
 }

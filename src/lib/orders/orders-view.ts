@@ -47,10 +47,18 @@ export function moneyOrPending(minor: number | null, currency: string, locale: P
   return minor === null ? TO_BE_CONFIRMED[locale] : formatMoney(minor, currency, locale)
 }
 
-export function orderActions(status: OrderStatus, hasPendingProof: boolean): OrderAction[] {
+// Lines still waiting for the owner's price (more people than the last tier).
+export function unpricedLines(lines: { snapshot: { pendingQuote?: boolean } }[]): number {
+  return lines.filter((l) => l.snapshot.pendingQuote === true).length
+}
+
+// unpriced: how many lines still need a price. set_quoted_price takes one price for one
+// line, so set_price is offered only when exactly one line needs it (the list view does
+// not load lines and keeps the default).
+export function orderActions(status: OrderStatus, hasPendingProof: boolean, unpriced = 1): OrderAction[] {
   const actions: OrderAction[] = []
   if (status === 'pending_shipping') actions.push('set_shipping')
-  if (status === 'pending_quote') actions.push('set_price')
+  if (status === 'pending_quote' && unpriced === 1) actions.push('set_price')
   if (status === 'awaiting_review') {
     actions.push('approve')
     // reject_proof needs a pending proof; a pay-on-delivery order has none

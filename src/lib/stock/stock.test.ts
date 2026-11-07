@@ -5,9 +5,6 @@ import {
   InsufficientStockError,
   StockNotTrackedError,
   adjustStock,
-  commitStock,
-  holdStock,
-  releaseStock,
   type StockStore,
 } from './stock'
 import { createSupabaseStockStore } from './stock.store'
@@ -29,65 +26,17 @@ function fakeClient(result: Result) {
 }
 
 describe('createSupabaseStockStore', () => {
-  it('holdStock calls hold_stock and returns the reservation id', async () => {
-    const { client, calls } = fakeClient({ data: 'res-1', error: null })
-    const id = await holdStock('A', 'v1', 2, 'o1', { store: createSupabaseStockStore(client) })
-    expect(id).toBe('res-1')
-    expect(calls).toEqual([
-      { fn: 'hold_stock', args: { p_tenant: 'A', p_variant: 'v1', p_qty: 2, p_order: 'o1' } },
-    ])
+  it('adjust calls adjust_stock with tenant, variant and delta and returns the new stock', async () => {
+    const { client, calls } = fakeClient({ data: 9, error: null })
+    expect(await createSupabaseStockStore(client).adjust('A', 'v1', 2)).toBe(9)
+    expect(calls).toEqual([{ fn: 'adjust_stock', args: { p_tenant: 'A', p_variant: 'v1', p_delta: 2 } }])
   })
 
-  it('translates insufficient_stock (P0001) to InsufficientStockError', async () => {
-    const { client } = fakeClient({ data: null, error: { code: 'P0001', message: 'insufficient_stock' } })
-    await expect(
-      holdStock('A', 'v1', 1, 'o1', { store: createSupabaseStockStore(client) }),
-    ).rejects.toBeInstanceOf(InsufficientStockError)
-  })
-
-  it('maps 42501 to ForbiddenError and rethrows other errors unchanged', async () => {
-    const forbidden = fakeClient({ data: null, error: { code: '42501', message: 'x' } })
-    await expect(
-      holdStock('A', 'v1', 1, null, { store: createSupabaseStockStore(forbidden.client) }),
-    ).rejects.toBeInstanceOf(ForbiddenError)
-    const err = { code: '08006', message: 'down' }
-    const other = fakeClient({ data: null, error: err })
-    await expect(
-      holdStock('A', 'v1', 1, null, { store: createSupabaseStockStore(other.client) }),
-    ).rejects.toBe(err)
-  })
-
-  it('a P0001 with another message is not an InsufficientStockError', async () => {
-    const err = { code: 'P0001', message: 'something else' }
-    const { client } = fakeClient({ data: null, error: err })
-    await expect(
-      holdStock('A', 'v1', 1, null, { store: createSupabaseStockStore(client) }),
-    ).rejects.toBe(err)
-  })
-
-  it('releaseStock and commitStock call their functions and return the count', async () => {
-    const r = fakeClient({ data: 2, error: null })
-    expect(await releaseStock('o1', { store: createSupabaseStockStore(r.client) })).toBe(2)
-    expect(r.calls[0]).toEqual({ fn: 'release_stock', args: { p_order: 'o1' } })
-    const c = fakeClient({ data: 1, error: null })
-    expect(await commitStock('o1', { store: createSupabaseStockStore(c.client) })).toBe(1)
-    expect(c.calls[0]).toEqual({ fn: 'commit_stock', args: { p_order: 'o1' } })
-  })
-})
-
-describe('holdStock validation', () => {
-  it('rejects a non-positive or fractional quantity without touching the store', async () => {
-    let touched = false
-    const store: StockStore = {
-      hold: async () => { touched = true; return 'x' },
-      release: async () => 0,
-      commit: async () => 0,
-      adjust: async () => 0,
+  it('rethrows unknown errors unchanged, including a P0001 with another message', async () => {
+    for (const err of [{ code: '08006', message: 'down' }, { code: 'P0001', message: 'something else' }]) {
+      const { client } = fakeClient({ data: null, error: err })
+      await expect(createSupabaseStockStore(client).adjust('A', 'v1', 1)).rejects.toBe(err)
     }
-    for (const qty of [0, -1, 1.5]) {
-      await expect(holdStock('A', 'v1', qty, null, { store })).rejects.toThrow()
-    }
-    expect(touched).toBe(false)
   })
 })
 
@@ -95,9 +44,6 @@ describe('adjustStock', () => {
   function recordingStore() {
     const calls: unknown[][] = []
     const store: StockStore = {
-      hold: async () => 'x',
-      release: async () => 0,
-      commit: async () => 0,
       adjust: async (...args) => { calls.push(args); return 7 },
     }
     return { store, calls }

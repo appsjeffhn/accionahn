@@ -1,4 +1,4 @@
-import { SUPPORTED_CURRENCIES } from '../agency/wizard-schema'
+import { SUPPORTED_CURRENCIES } from './currencies'
 import { convertMinor, percentOf } from './money'
 import type {
   CartLine,

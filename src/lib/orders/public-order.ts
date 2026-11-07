@@ -1,4 +1,4 @@
-import type { OrderLineSnapshot } from './orders'
+import { PUBLIC_TOKEN_RE, type OrderLineSnapshot } from './orders'
 import type { OrderStatus } from './states'
 
 // The customer's view of one order, reached by its link (/order/<token>) on the store's
@@ -9,7 +9,6 @@ import type { OrderStatus } from './states'
 
 export const CANCELLED_VISIBLE_DAYS = 30
 const DAY_MS = 86_400_000
-const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
 export type ProofStatus = 'pending' | 'approved' | 'rejected'
 export type Bilingual = { es: string; en: string }
@@ -104,7 +103,7 @@ export async function getPublicOrder(
   tenantId: string,
   deps: PublicOrderDeps = {},
 ): Promise<PublicOrderView | null> {
-  if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null
+  if (typeof token !== 'string' || !PUBLIC_TOKEN_RE.test(token)) return null
   if (typeof tenantId !== 'string' || tenantId === '') return null
   const store = await resolveStore(deps.store)
   const r = await store.findByToken(tenantId, token)

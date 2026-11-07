@@ -1,12 +1,9 @@
 import { z } from 'zod'
+import { SUPPORTED_CURRENCIES } from '../pricing/currencies'
 import { RESERVED_SLUGS } from '../tenancy/reserved'
 
-// Fixed allowlist of ISO 4217 codes the platform supports. Extend it here to
-// onboard a market; a regex alone would accept codes that do not exist.
-export const SUPPORTED_CURRENCIES = [
-  'HNL', 'USD', 'EUR', 'MXN', 'GTQ', 'CRC', 'COP', 'PEN', 'CLP', 'ARS',
-  'BRL', 'DOP', 'NIO', 'PAB', 'UYU', 'BOB', 'PYG', 'VES', 'CAD', 'GBP',
-] as const
+// The platform's currency allowlist lives with the pricing engine; re-exported for the wizard.
+export { SUPPORTED_CURRENCIES }
 
 export const ORDER_FIELD_KEYS = [
   'place',

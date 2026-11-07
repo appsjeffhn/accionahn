@@ -1,7 +1,20 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import { ForbiddenError } from '../auth/session'
-import { DailyLimitError, SlotTakenError, type CalendarDay, type CalendarStore } from '../calendar/calendar'
+import {
+  ClosedDateError,
+  DailyLimitError,
+  NotBookableError,
+  OutsideHoursError,
+  SlotTakenError,
+  TooFarError,
+  TooSoonError,
+  type CalendarDay,
+  type CalendarStore,
+} from '../calendar/calendar'
 import type { CatalogStore, StoreCatalog } from '../catalog/catalog'
 import { InsufficientStockError } from '../stock/stock'
 import type { Tenant } from '../tenancy/resolve'
@@ -12,12 +25,13 @@ import {
   QuoteRejectedError,
   TooManyPendingOrdersError,
   createOrder,
-  findOrderByToken,
   generatePublicToken,
+  PUBLIC_TOKEN_RE,
   type OrderWrite,
   type OrdersDeps,
   type OrdersStore,
 } from './orders'
+import { MAX_MINOR } from '../pricing/money'
 import { createSupabaseOrdersStore } from './orders.store'
 import { PENDING_STATUSES } from './states'
 
@@ -32,6 +46,9 @@ const P_OFF = '00000000-0000-4000-8000-000000000004'
 const V_JAR = '00000000-0000-4000-8000-0000000000a1'
 const V_LAST = '00000000-0000-4000-8000-0000000000a2'
 const V_OFF = '00000000-0000-4000-8000-0000000000a3'
+const P_SOLO = '00000000-0000-4000-8000-000000000005'
+const V_SOLO_OFF = '00000000-0000-4000-8000-0000000000a5'
+const P_BIG = '00000000-0000-4000-8000-000000000006'
 const ZONE = '00000000-0000-4000-8000-000000000010'
 const R1 = '00000000-0000-4000-8000-000000000020'
 
@@ -71,11 +88,22 @@ function catalog(settings: Record<string, unknown> = {}, dateRules: Record<strin
         id: P_OFF, kind: 'simple', reservable: false, name: { es: 'Viejo', en: 'Old' },
         price_minor: 100, fixed_prices: {}, configurable: null, deposit: { kind: 'none', value: 0 }, active: false,
       },
+      // active, but its only variant is inactive: not orderable
+      {
+        id: P_SOLO, kind: 'simple', reservable: false, name: { es: 'Solo', en: 'Solo' },
+        price_minor: 100, fixed_prices: {}, configurable: null, deposit: { kind: 'none', value: 0 }, active: true,
+      },
+      // price near the int4 limit of the order columns
+      {
+        id: P_BIG, kind: 'simple', reservable: false, name: { es: 'Caro', en: 'Pricey' },
+        price_minor: 1_500_000_000, fixed_prices: {}, configurable: null, deposit: { kind: 'none', value: 0 }, active: true,
+      },
     ],
     variants: [
       { id: V_JAR, product_id: P_PICKLE, label: { es: 'Frasco', en: 'Jar' }, stock: 5, active: true },
       { id: V_LAST, product_id: P_PICKLE, label: { es: 'Ultimo', en: 'Last' }, stock: 1, active: true },
       { id: V_OFF, product_id: P_OFF, label: { es: 'X', en: 'X' }, stock: 5, active: true },
+      { id: V_SOLO_OFF, product_id: P_SOLO, label: { es: 'Y', en: 'Y' }, stock: 5, active: false },
     ],
     dateRules,
     zones: [{ id: ZONE, fee_minor: 15000 }],
@@ -136,7 +164,6 @@ function world(cat: StoreCatalog = catalog()) {
       state.orders.push({ ...w, id, holdExpiresAt: w.status === 'awaiting_deposit' ? new Date(NOW().getTime() + 24 * HOUR).toISOString() : null })
       return id
     },
-    findByToken: async () => null,
   }
 
   const calendarStore: CalendarStore = {
@@ -153,9 +180,6 @@ function world(cat: StoreCatalog = catalog()) {
         resourceId: b.resourceId, productId: b.productId, start: new Date(b.start).toISOString(), end: new Date(b.end).toISOString(),
       })),
     }),
-    book: async () => { throw new Error('createOrder must book through create_order') },
-    release: async () => 0,
-    confirm: async () => 0,
   }
 
   const catalogStore: CatalogStore = {
@@ -262,12 +286,46 @@ describe('createOrder: prices come from the server', () => {
     expect(o.lines[0].snapshot).toMatchObject({ pendingQuote: true, depositMinor: null })
   })
 
-  it('another currency: converted totals, rate and base currency stored, fee kept in base', async () => {
+  // Ruling: only the base currency sells until the multi-currency task (exponent
+  // scaling, required rate, one rounding place) lands; an enabled extra currency too.
+  it('refuses any currency other than the base one, even an enabled one with a rate', async () => {
     const { state, deps } = world()
-    const r = await createOrder(TENANT, { ...pickles, currency: 'USD' }, deps)
-    const o = state.orders[0]
-    expect(r.quote.totalMinor).toBe(800 + 600)
-    expect([o.currency, o.baseCurrency, o.exchangeRate, o.shippingFeeMinor]).toEqual(['USD', 'HNL', 25, 15000])
+    await expect(createOrder(TENANT, { ...pickles, currency: 'USD' }, deps)).rejects.toMatchObject({
+      name: 'InvalidOrderError', code: 'currency_not_enabled',
+    })
+    expect(state.creates).toBe(0)
+    await createOrder(TENANT, { ...pickles, currency: 'HNL' }, deps)
+    expect(state.orders[0]).toMatchObject({ currency: 'HNL', baseCurrency: 'HNL', exchangeRate: null })
+  })
+
+  it('refuses a cart with more than one line beyond the last tier (one quote per order)', async () => {
+    const { state, deps } = world()
+    const taco = (lineId: string) => ({ lineId, productId: P_TACO, qty: 1, people: 35, meats: ['res'] })
+    await expect(
+      createOrder(TENANT, { lines: [taco('a'), taco('b')], customer, zoneId: ZONE }, deps),
+    ).rejects.toMatchObject({ name: 'InvalidOrderError', code: 'multiple_quote_lines' })
+    expect(state.creates).toBe(0)
+    await createOrder(TENANT, { lines: [taco('a'), pickles.lines[0]], customer, zoneId: ZONE }, deps)
+    expect(state.orders[0].status).toBe('pending_quote')
+  })
+
+  it('refuses amounts the order columns cannot hold (int4) before the database', async () => {
+    const { state, deps } = world()
+    const big = (lineId: string, qty: number) => ({ lineId, productId: P_BIG, qty })
+    // one line over the limit; two lines whose subtotal is; a total that is only with the fee
+    for (const lines of [[big('a', 2)], [big('a', 1), big('b', 1)]]) {
+      await expect(createOrder(TENANT, { lines, customer, zoneId: ZONE }, deps)).rejects.toMatchObject({
+        name: 'InvalidOrderError', code: 'amount_too_large',
+      })
+    }
+    const nearLimit = catalog()
+    nearLimit.products = nearLimit.products.map((p) => (p.id === P_BIG ? { ...p, price_minor: MAX_MINOR - 100 } : p))
+    const w = world(nearLimit)
+    await expect(createOrder(TENANT, { lines: [big('a', 1)], customer, zoneId: ZONE }, w.deps)).rejects.toMatchObject({
+      name: 'InvalidOrderError', code: 'amount_too_large',
+    })
+    expect(state.creates + w.state.creates).toBe(0)
+    expect(MAX_MINOR).toBe(2_147_483_647)
   })
 
   it('rejects a currency the store does not sell in', async () => {
@@ -325,6 +383,9 @@ describe('createOrder: input validation at the boundary', () => {
       [{ lineId: 'l', productId: P_PICKLE, qty: 1 }, 'variant_required'],
       [{ lineId: 'l', productId: P_PICKLE, variantId: V_OFF, qty: 1 }, 'product_unavailable'],
       [{ lineId: 'l', productId: P_CAKE, variantId: V_JAR, qty: 1 }, 'product_unavailable'],
+      // every variant inactive: the product still has variants, so it needs one (and none is sellable)
+      [{ lineId: 'l', productId: P_SOLO, qty: 1 }, 'variant_required'],
+      [{ lineId: 'l', productId: P_SOLO, variantId: V_SOLO_OFF, qty: 1 }, 'product_unavailable'],
     ]
     for (const [line, code] of cases) {
       await expect(createOrder(TENANT, { ...pickles, lines: [line], start: at('10:00') }, deps)).rejects.toMatchObject({
@@ -500,17 +561,28 @@ describe('createOrder: abuse limit and token', () => {
   })
 })
 
-describe('findOrderByToken', () => {
-  it('returns null for a malformed token without asking the store', async () => {
-    let asked = 0
-    const store = { findByToken: async () => { asked++; return null } } as unknown as OrdersStore
-    for (const token of ['', 'short', 'x'.repeat(44), `${'a'.repeat(42)}=`]) {
-      expect(await findOrderByToken('T', token, { orders: store })).toBeNull()
+describe('PUBLIC_TOKEN_RE', () => {
+  it('accepts exactly the tokens generatePublicToken makes', () => {
+    expect(generatePublicToken()).toMatch(PUBLIC_TOKEN_RE)
+    for (const token of ['', 'short', 'x'.repeat(44), `${'a'.repeat(42)}=`, `${'a'.repeat(42)}/`]) {
+      expect(PUBLIC_TOKEN_RE.test(token)).toBe(false)
     }
-    expect(asked).toBe(0)
-    const token = generatePublicToken()
-    expect(await findOrderByToken('T', token, { orders: store })).toBeNull()
-    expect(asked).toBe(1)
+  })
+
+  it('is the only copy of the token pattern in the app', () => {
+    const root = fileURLToPath(new URL('../../', import.meta.url))
+    const copies: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) walk(path)
+        else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          if (readFileSync(path, 'utf8').includes('_-]{43}')) copies.push(relative(root, path).split(sep).join('/'))
+        }
+      }
+    }
+    walk(root)
+    expect(copies).toEqual(['lib/orders/orders.ts'])
   })
 })
 
@@ -584,9 +656,15 @@ describe('createSupabaseOrdersStore', () => {
       [{ code: 'P0001', message: 'insufficient_stock' }, InsufficientStockError],
       [{ code: 'P0001', message: 'slot_taken' }, SlotTakenError],
       [{ code: 'P0001', message: 'daily_limit_reached' }, DailyLimitError],
+      [{ code: 'P0001', message: 'outside_hours' }, OutsideHoursError],
+      [{ code: 'P0001', message: 'closed_date' }, ClosedDateError],
+      [{ code: 'P0001', message: 'too_soon' }, TooSoonError],
+      [{ code: 'P0001', message: 'too_far' }, TooFarError],
+      [{ code: 'P0001', message: 'not_bookable' }, NotBookableError],
       [{ code: 'P0001', message: 'product_unavailable' }, InvalidOrderError],
       [{ code: 'P0001', message: 'variant_required' }, InvalidOrderError],
       [{ code: 'P0001', message: 'start_required' }, InvalidOrderError],
+      [{ code: 'P0001', message: 'missing_rate' }, InvalidOrderError],
       [{ code: '42501', message: 'x' }, ForbiddenError],
     ]
     for (const [error, type] of cases) {
@@ -619,30 +697,5 @@ describe('createSupabaseOrdersStore', () => {
     const client = { from: (table: string) => { filters.push(table); return query } } as unknown as SupabaseClient
     expect(await createSupabaseOrdersStore(client).loadRates('T')).toEqual({ USD: 25 })
     expect(filters).toEqual(['tenants', ['id', 'T']])
-  })
-
-  it('findByToken filters by tenant and token and orders the lines', async () => {
-    const filters: unknown[] = []
-    const row = {
-      id: 'o1', status: 'awaiting_deposit', currency: 'HNL', customer_name: 'Ana', subtotal_minor: 20000,
-      total_minor: 35000, deposit_due_minor: 6000, due_on_delivery_minor: 29000, shipping_fee_minor: 15000,
-      hold_expires_at: '2099-03-02T12:00:00+00:00', created_at: '2099-03-01T12:00:00+00:00',
-      order_lines: [
-        { position: 2, product_id: 'p2', variant_id: null, qty: 1, total_minor: 5, snapshot: { lineId: 'b' } },
-        { position: 1, product_id: 'p1', variant_id: 'v1', qty: 2, total_minor: 7, snapshot: { lineId: 'a' } },
-      ],
-    }
-    const query = {
-      select: () => query,
-      eq: (...args: unknown[]) => { filters.push(args); return query },
-      maybeSingle: async () => ({ data: row, error: null }),
-    }
-    const client = { from: () => query } as unknown as SupabaseClient
-    const order = await createSupabaseOrdersStore(client).findByToken('T', 'tok')
-    expect(filters).toEqual([['tenant_id', 'T'], ['public_token', 'tok']])
-    expect(order).toMatchObject({
-      id: 'o1', status: 'awaiting_deposit', totalMinor: 35000, holdExpiresAt: '2099-03-02T12:00:00+00:00',
-      lines: [{ productId: 'p1', qty: 2 }, { productId: 'p2', qty: 1 }],
-    })
   })
 })

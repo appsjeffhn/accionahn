@@ -7,6 +7,7 @@ import {
   breakdown,
   lineText,
   orderActions,
+  unpricedLines,
   parseAmountForm,
   parseReasonForm,
   parseStatusFilter,
@@ -71,6 +72,15 @@ describe('orderActions / toOrderRow actions', () => {
     for (const s of ORDER_STATUSES.filter((s) => s !== 'pending_quote')) {
       expect(actionsOf(s)).not.toContain('set_price')
     }
+  })
+
+  it('does not offer set_price when one price cannot cover the order (several unpriced lines)', () => {
+    expect(orderActions('pending_quote', false, 1)).toEqual(['set_price', 'cancel'])
+    expect(orderActions('pending_quote', false, 2)).toEqual(['cancel'])
+    expect(orderActions('pending_quote', false, 0)).toEqual(['cancel'])
+    const line = (pendingQuote: boolean) => ({ snapshot: { pendingQuote } })
+    expect(unpricedLines([line(true), line(false), line(true)])).toBe(2)
+    expect(unpricedLines([line(false), { snapshot: {} }])).toBe(0)
   })
 
   it('offers approve only on awaiting_review, reject only with a proof to reject', () => {

@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { addToCart, CartFullError, cartIssues, removeFromCart } from "@/lib/cart/cart";
 import { listAvailableSlots, localDay } from "@/lib/calendar/calendar";
 import { submitProof, PROOF_MAX_BYTES } from "@/lib/orders/operations";
-import { createOrder } from "@/lib/orders/orders";
+import { createOrder, PUBLIC_TOKEN_RE } from "@/lib/orders/orders";
 import {
   buildCartItem,
   checkoutErrorKey,
@@ -31,7 +31,6 @@ const checkoutLimiter = createRateLimiter({ capacity: 5, refillMs: 12 * 60_000 }
 const proofLimiter = createRateLimiter({ capacity: 10, refillMs: 6 * 60_000 });
 
 const LINE_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
-const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
 function newLineId(): string {
   return randomBytes(9).toString("base64url");
@@ -121,7 +120,7 @@ export async function checkoutAction(_prev: StoreFormState, fd: FormData): Promi
 export async function uploadProofAction(_prev: StoreFormState, fd: FormData): Promise<StoreFormState> {
   const tenantId = await storeTenantId();
   const token = fd.get("token");
-  if (!tenantId || typeof token !== "string" || !TOKEN_RE.test(token)) return failed({ _form: "unavailable" });
+  if (!tenantId || typeof token !== "string" || !PUBLIC_TOKEN_RE.test(token)) return failed({ _form: "unavailable" });
 
   // The request body is capped by serverActions.bodySizeLimit (next.config.ts) before it
   // is parsed; the declared size is checked here before the bytes are read.

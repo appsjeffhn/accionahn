@@ -3,15 +3,7 @@ import { ForbiddenError } from '../auth/session'
 import { BOOKING_ERRORS } from '../calendar/calendar.store'
 import { InsufficientStockError } from '../stock/stock'
 import { createServiceClient } from '../supabase/service'
-import {
-  InvalidOrderError,
-  TooManyPendingOrdersError,
-  type OrderLineSnapshot,
-  type OrderWrite,
-  type OrdersStore,
-  type PublicOrder,
-} from './orders'
-import type { OrderStatus } from './states'
+import { InvalidOrderError, TooManyPendingOrdersError, type OrderWrite, type OrdersStore } from './orders'
 
 type PgError = { code?: string; message?: string }
 
@@ -21,6 +13,7 @@ const ORDER_ERRORS: Record<string, () => Error> = {
   product_unavailable: () => new InvalidOrderError('product_unavailable'),
   variant_required: () => new InvalidOrderError('variant_required'),
   start_required: () => new InvalidOrderError('start_required'),
+  missing_rate: () => new InvalidOrderError('missing_rate'),
 }
 
 // 42501: tenant not active or a foreign product/resource. P0001 is the generic raise
@@ -92,46 +85,6 @@ export function createSupabaseOrdersStore(
       if (error?.code === DEADLOCK) ({ data, error } = await supabase.rpc('create_order', args))
       if (error) translate(error)
       return data as string
-    },
-
-    async findByToken(tenantId, token) {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(
-          'id, status, currency, customer_name, subtotal_minor, total_minor, deposit_due_minor, ' +
-            'due_on_delivery_minor, shipping_fee_minor, hold_expires_at, created_at, ' +
-            'order_lines(position, product_id, variant_id, qty, total_minor, snapshot)',
-        )
-        .eq('tenant_id', tenantId)
-        .eq('public_token', token)
-        .maybeSingle()
-      if (error) throw error
-      if (!data) return null
-      const r = data as unknown as Record<string, unknown>
-      const lines = ((r.order_lines ?? []) as Record<string, unknown>[])
-        .slice()
-        .sort((a, b) => Number(a.position) - Number(b.position))
-      const order: PublicOrder = {
-        id: r.id as string,
-        status: r.status as OrderStatus,
-        currency: r.currency as string,
-        customerName: r.customer_name as string,
-        subtotalMinor: r.subtotal_minor as number,
-        totalMinor: (r.total_minor as number | null) ?? null,
-        depositDueMinor: (r.deposit_due_minor as number | null) ?? null,
-        dueOnDeliveryMinor: (r.due_on_delivery_minor as number | null) ?? null,
-        shippingFeeMinor: (r.shipping_fee_minor as number | null) ?? null,
-        holdExpiresAt: (r.hold_expires_at as string | null) ?? null,
-        createdAt: r.created_at as string,
-        lines: lines.map((l) => ({
-          productId: l.product_id as string,
-          variantId: (l.variant_id as string | null) ?? null,
-          qty: l.qty as number,
-          totalMinor: l.total_minor as number,
-          snapshot: l.snapshot as OrderLineSnapshot,
-        })),
-      }
-      return order
     },
   }
 }

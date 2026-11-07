@@ -3,7 +3,7 @@ import { createServiceClient } from '../supabase/service'
 import type { FileStore } from './file-store'
 
 // Private bucket for payment proofs, keyed <tenant_id>/<order_id>/<uuid>. Storage is not
-// part of the local stack: the bucket is created (private, 5 MB limit) and this store is
+// part of the local stack: the bucket is created (private, 4 MB limit, PROOF_MAX_BYTES) and this store is
 // verified by hand on staging (docs/environments.md).
 export const ORDER_PROOFS_BUCKET = 'order-proofs'
 

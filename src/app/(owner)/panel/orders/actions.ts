@@ -26,7 +26,10 @@ function opFailure(error: unknown): FormState {
   if (error instanceof HoldsReleasedError) return failed({ _form: "holdsReleased" });
   if (error instanceof OrderNotFoundError) return failed({ _form: "orderNotFound" });
   if (error instanceof InvalidOrderStateError) {
-    return error.code === "no_proof" ? failed({ _form: "noProof" }) : failed({ _form: "orderState" });
+    if (error.code === "no_proof") return failed({ _form: "noProof" });
+    if (error.code === "multiple_unpriced_lines") return failed({ _form: "multipleUnpriced" });
+    if (error.code === "missing_rate") return failed({ _form: "missingRate" });
+    return failed({ _form: "orderState" });
   }
   if (error instanceof InvalidOperationError) {
     if (error.code === "reason_required") return failed({ reason: "reasonRequired" });

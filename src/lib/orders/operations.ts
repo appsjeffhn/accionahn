@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { ForbiddenError, requireRole, type Session } from '../auth/session'
-import { lineDepositMinor } from '../pricing/engine'
-import { convertMinor } from '../pricing/money'
-import type { Deposit } from '../pricing/types'
+import { MAX_MINOR } from '../pricing/money'
 import type { FileStore } from '../storage/file-store'
+import { PUBLIC_TOKEN_RE } from './orders'
 import type { OrderStatus } from './states'
 
 // Owner operations on an order (price it, review the payment proof, cancel) and the
@@ -19,7 +18,9 @@ export class OrderNotFoundError extends Error {
 }
 
 // code: invalid_status (the operation does not apply to the order's status),
-// invalid_transition, no_proof (nothing to reject: pay-on-delivery order)
+// invalid_transition, no_proof (nothing to reject: pay-on-delivery order),
+// multiple_unpriced_lines (one quoted price cannot be split over several lines),
+// missing_rate (order in another currency without its exchange rate: cannot be priced)
 export class InvalidOrderStateError extends Error {
   constructor(public readonly code: string) {
     super(`Operation not allowed in this order state: ${code}`)
@@ -93,55 +94,9 @@ export async function resolveOpsStore(store?: OrderOpsStore): Promise<OrderOpsSt
   return createSupabaseOrderOpsStore()
 }
 
-// --- pricing preview -----------------------------------------------------------------
-
-export type PricingLine = {
-  totalMinor: number
-  pendingQuote: boolean
-  deposit: Deposit
-  // fixed deposit already in the order currency (OrderLineSnapshot.depositFixedMinor)
-  depositFixedMinor: number | null
-}
-
-export type PricingPreview =
-  | { status: 'pending_quote' | 'pending_shipping'; subtotalMinor: number; totalMinor: null; depositDueMinor: null; dueOnDeliveryMinor: null }
-  | { status: 'awaiting_deposit' | 'awaiting_review'; subtotalMinor: number; totalMinor: number; depositDueMinor: number; dueOnDeliveryMinor: number }
-
-// What order_reprice (SQL) will store, for the panel to show before the owner saves:
-// line totals as stored, each line's deposit from its own definition (lineDepositMinor,
-// the engine's rule), the base-currency fee converted half up with the order's rate and
-// added to the deposit only when prepaid.
-export function previewTotals(
-  lines: PricingLine[],
-  opts: { feeMinor: number | null; exchangeRate: number | null; prepay: boolean },
-): PricingPreview {
-  const subtotalMinor = lines.reduce((s, l) => s + l.totalMinor, 0)
-  if (lines.some((l) => l.pendingQuote)) {
-    return { status: 'pending_quote', subtotalMinor, totalMinor: null, depositDueMinor: null, dueOnDeliveryMinor: null }
-  }
-  if (opts.feeMinor === null) {
-    return { status: 'pending_shipping', subtotalMinor, totalMinor: null, depositDueMinor: null, dueOnDeliveryMinor: null }
-  }
-  const fee = opts.exchangeRate === null ? opts.feeMinor : convertMinor(opts.feeMinor, opts.exchangeRate)
-  const linesDeposit = lines.reduce(
-    (s, l) => s + lineDepositMinor(l.totalMinor, l.deposit, l.depositFixedMinor ?? 0),
-    0,
-  )
-  const depositDueMinor = linesDeposit + (opts.prepay ? fee : 0)
-  const totalMinor = subtotalMinor + fee
-  return {
-    status: depositDueMinor > 0 ? 'awaiting_deposit' : 'awaiting_review',
-    subtotalMinor,
-    totalMinor,
-    depositDueMinor,
-    dueOnDeliveryMinor: totalMinor - depositDueMinor,
-  }
-}
-
 // --- owner operations ----------------------------------------------------------------
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const MAX_MINOR = 2_147_483_647
 export const REASON_MAX = 1000
 
 function amount(value: number): number {
@@ -235,7 +190,9 @@ export async function cancelOrder(
 
 // --- payment proof -------------------------------------------------------------------
 
-export const PROOF_MAX_BYTES = 5 * 1024 * 1024
+// 4 MB: a Server Action body on Vercel is capped at 4.5 MB (multipart overhead included),
+// see serverActions.bodySizeLimit in next.config.ts.
+export const PROOF_MAX_BYTES = 4 * 1024 * 1024
 export const PROOF_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const
 export type ProofType = (typeof PROOF_TYPES)[number]
 
@@ -258,7 +215,6 @@ function declaredType(contentType: string): string {
   return t === 'image/jpg' ? 'image/jpeg' : t
 }
 
-const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
 export type ProofDeps = {
   // tenant of the storefront host (x-tenant-id): a token only works on its own store
@@ -285,7 +241,7 @@ export async function submitProof(
   file: { bytes: Uint8Array; contentType: string },
   deps: ProofDeps,
 ): Promise<{ status: 'awaiting_review' }> {
-  if (typeof orderToken !== 'string' || !TOKEN_RE.test(orderToken)) throw new ProofRejectedError('order_unavailable')
+  if (typeof orderToken !== 'string' || !PUBLIC_TOKEN_RE.test(orderToken)) throw new ProofRejectedError('order_unavailable')
   const bytes = file?.bytes
   if (!(bytes instanceof Uint8Array)) throw new ProofRejectedError('file_type_not_allowed')
   if (bytes.byteLength > PROOF_MAX_BYTES) throw new ProofRejectedError('file_too_large')

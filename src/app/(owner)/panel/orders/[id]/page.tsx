@@ -10,6 +10,7 @@ import {
   lineText,
   moneyOrPending,
   orderActions,
+  unpricedLines,
   REVIEW_ALERT_HOURS,
 } from "@/lib/orders/orders-view";
 import { getPanelOrder, panelTimeZone, signProofs } from "@/lib/orders/panel-orders";
@@ -46,7 +47,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const when = (iso: string) => formatWhen(iso, lang, timeZone);
   const money = breakdown(order, lang);
   const hasPendingProof = order.proofs.some((p) => p.status === "pending");
-  const actions = orderActions(order.status, hasPendingProof);
+  const unpriced = unpricedLines(order.lines);
+  const actions = orderActions(order.status, hasPendingProof, unpriced);
   const overdue = isReviewOverdue(
     {
       status: order.status,
@@ -187,6 +189,10 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               />
             </PanelForm>
           </div>
+        )}
+
+        {order.status === "pending_quote" && unpriced > 1 && (
+          <p className="hint" role="note">{t("multipleUnpriced")}</p>
         )}
 
         {actions.includes("set_price") && (

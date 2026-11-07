@@ -165,7 +165,7 @@ describe('quoteForDisplay', () => {
     )
     expect(display).toEqual(direct)
 
-    const orders: OrdersStore = { loadRates: async () => ({}), create: async () => 'order-1', findByToken: async () => null }
+    const orders: OrdersStore = { loadRates: async () => ({}), create: async () => 'order-1' }
     const created = await createOrder(
       TENANT,
       { lines: cart.lines, customer: { name: 'Ana', phone: '99998888' }, zoneId: ZONE },

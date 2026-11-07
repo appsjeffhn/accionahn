@@ -9,7 +9,7 @@
     "submit": "Sign in",
     "invalidCredentials": "Incorrect email or password.",
     "forgotPassword": "Forgot your password?",
-    "linkInvalid": "This link is invalid or has expired. Ask the agency for a new invitation.",
+    "linkInvalid": "This link is invalid or has expired. Ask the agency to send you a new link; it also works if you already had an account.",
     "logout": "Sign out"
   },
   "setPassword": {
@@ -330,6 +330,7 @@
       "amountHint": "In {currency}, with a decimal point (for example 150.00). The total and deposit are recalculated.",
       "amountHintConverted": "In {currency}, with a decimal point (for example 150.00). It is converted to {orderCurrency} at the order rate; the total and deposit are recalculated.",
       "priceIntro": "The order has more people than your last tier. Type the price of that part.",
+      "multipleUnpriced": "This order has several parts with more people than your last tier and only one price can be set here. Cancel it and ask the customer for one order per part.",
       "savePrice": "Save price",
       "quotedPrice": "Price ({currency})",
       "confirmOrder": "Confirm the order",
@@ -504,6 +505,7 @@
       "email": "Owner email",
       "submit": "Invite the owner",
       "sent": "Invitation sent.",
+      "resent": "A link to set the password was sent.",
       "errors": {
         "invalidEmail": "Enter a valid email.",
         "alreadyMember": "That email already belongs to another store or to the agency.",
@@ -568,6 +570,8 @@
       "holdsReleased": "It cannot be confirmed: the payment deadline passed and the product or time slot was already released. If the customer paid late, create the order again or refund them.",
       "orderNotFound": "This order no longer exists.",
       "noProof": "There is no proof to review.",
+      "multipleUnpriced": "This order has several unpriced parts and only one price can be set here. Cancel it and ask the customer for one order per part.",
+      "missingRate": "This order is in another currency without an exchange rate and cannot be priced. Cancel it and ask the customer to order again.",
       "orderState": "The order changed while you were viewing it. Reload the page.",
       "themeColor": "Choose a valid color (#rrggbb format).",
       "themeFont": "Choose one of the fonts in the list.",
@@ -703,7 +707,7 @@
       "noInstructions": "The store will send you the payment details.",
       "proofRejected": "The store could not validate your receipt: {reason}. Please upload another one.",
       "proofLabel": "Payment receipt",
-      "proofHint": "Photo (JPG, PNG or WEBP) or PDF, up to 5 MB.",
+      "proofHint": "Photo (JPG, PNG or WEBP) or PDF, up to 4 MB.",
       "proofSubmit": "Send receipt",
       "proofSaved": "We received your receipt. The store will review it.",
       "deadlinePassed": "The payment deadline has passed. Please contact the store.",
@@ -739,11 +743,13 @@
       "time": "Enter a valid time.",
       "notAwaiting": "This order is no longer awaiting a payment.",
       "expired": "The payment deadline has passed.",
-      "tooLarge": "The file is larger than 5 MB.",
+      "tooLarge": "The file is larger than 4 MB.",
       "fileType": "Upload a photo (JPG, PNG or WEBP) or a PDF.",
       "noFile": "Choose your receipt file.",
       "emptyCart": "Your cart is empty.",
-      "cartChanged": "Your cart changed: a product is no longer available. Check it."
+      "cartChanged": "Your cart changed: a product is no longer available. Check it.",
+      "multipleQuoteLines": "We can quote only one product with more people than the last package per order. Place one order for each.",
+      "amountTooLarge": "Your order total is too high to process online. Lower the quantities or contact us."
     }
   }
 }

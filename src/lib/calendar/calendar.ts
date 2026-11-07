@@ -54,18 +54,10 @@ export type CalendarDay = {
   bookings: { resourceId: string; productId: string; start: string; end: string }[]
 }
 
+// Slots are booked, released and confirmed inside the order SQL functions (create_order
+// calls book_slot); the app only reads a day to list the free slots.
 export type CalendarStore = {
   loadDay: (tenantId: string, productId: string, day: string) => Promise<CalendarDay>
-  // Returns the booking id. Throws the typed errors above or ForbiddenError.
-  book: (
-    tenantId: string,
-    productId: string,
-    resourceId: string | null,
-    start: string,
-    orderId: string,
-  ) => Promise<string>
-  release: (orderId: string) => Promise<number>
-  confirm: (orderId: string) => Promise<number>
 }
 
 export type CalendarDeps = { store?: CalendarStore; now?: () => Date }
@@ -199,30 +191,4 @@ export async function listAvailableSlots(
   return [...byStart.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([start, ids]) => ({ start: new Date(start).toISOString(), resourceIds: ids.sort() }))
-}
-
-// Books a slot for an existing order. resourceId null = any free resource offering the
-// product (the one with fewest bookings that day). Throws SlotTakenError, DailyLimitError,
-// OutsideHoursError, ClosedDateError, TooSoonError, TooFarError, NotBookableError.
-export async function bookSlot(
-  tenantId: string,
-  productId: string,
-  resourceId: string | null,
-  start: string,
-  orderId: string,
-  deps: CalendarDeps = {},
-): Promise<string> {
-  if (!orderId) throw new RangeError('orderId is required')
-  if (Number.isNaN(Date.parse(start))) throw new RangeError(`invalid start: ${start}`)
-  return (await resolveStore(deps.store)).book(tenantId, productId, resourceId, start, orderId)
-}
-
-// Frees the order's held or confirmed bookings. Safe to repeat.
-export async function releaseBooking(orderId: string, deps: CalendarDeps = {}): Promise<number> {
-  return (await resolveStore(deps.store)).release(orderId)
-}
-
-// Turns the order's held bookings into confirmed ones.
-export async function confirmBooking(orderId: string, deps: CalendarDeps = {}): Promise<number> {
-  return (await resolveStore(deps.store)).confirm(orderId)
 }

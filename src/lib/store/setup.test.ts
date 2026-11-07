@@ -60,9 +60,6 @@ function memoryStore(stock: Record<string, number | null> = {}) {
 function stockStore(current: Record<string, number>) {
   const adjusts: [string, string, number][] = []
   const store: StockStore = {
-    hold: async () => 'r',
-    release: async () => 0,
-    commit: async () => 0,
     adjust: async (tenantId, variantId, delta) => {
       adjusts.push([tenantId, variantId, delta])
       const next = current[variantId] + delta

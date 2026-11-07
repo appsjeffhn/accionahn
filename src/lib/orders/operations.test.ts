@@ -11,16 +11,16 @@ import {
   ProofRejectedError,
   approveProof,
   cancelOrder,
-  previewTotals,
   rejectProof,
   setQuotedPrice,
   setShippingFee,
   sniffProofType,
   submitProof,
   type OrderOpsStore,
-  type PricingLine,
 } from './operations'
 import { createSupabaseOrderOpsStore } from './operations.store'
+import { lineDepositMinor } from '../pricing/engine'
+import type { Deposit } from '../pricing/types'
 import { canTransition, type OrderStatus } from './states'
 
 const TENANT_A = '10000000-0000-4000-8000-00000000000a'
@@ -39,6 +39,26 @@ const HTML = new TextEncoder().encode('<!doctype html><script>alert(1)</script>'
 
 const tokenOf = (n: number) => `tok${String(n)}`.padEnd(43, 'x')
 
+type PricingLine = { totalMinor: number; pendingQuote: boolean; deposit: Deposit; depositFixedMinor: number | null }
+
+// What order_reprice (SQL) stores, for the in-memory double: line totals, each line's
+// deposit from its own definition, the base-currency fee converted half up with the
+// order's rate and added to the deposit only when prepaid.
+function reprice(lines: PricingLine[], opts: { feeMinor: number | null; exchangeRate: number | null; prepay: boolean }) {
+  const subtotalMinor = lines.reduce((s, l) => s + l.totalMinor, 0)
+  if (lines.some((l) => l.pendingQuote)) return { status: 'pending_quote' as const, subtotalMinor }
+  if (opts.feeMinor === null) return { status: 'pending_shipping' as const, subtotalMinor }
+  const fee = opts.exchangeRate === null ? opts.feeMinor : Math.floor(opts.feeMinor / opts.exchangeRate + 0.5)
+  const deposit = lines.reduce((s, l) => s + lineDepositMinor(l.totalMinor, l.deposit, l.depositFixedMinor ?? 0), 0)
+  const depositDueMinor = deposit + (opts.prepay ? fee : 0)
+  return {
+    status: depositDueMinor > 0 ? ('awaiting_deposit' as const) : ('awaiting_review' as const),
+    subtotalMinor,
+    totalMinor: subtotalMinor + fee,
+    depositDueMinor,
+  }
+}
+
 type MemOrder = {
   id: string
   tenantId: string
@@ -56,7 +76,7 @@ type MemOrder = {
 }
 
 // In-memory model of the SQL operations (20261106000020): same state rules, holds and
-// events. Pricing goes through previewTotals, the TS mirror of order_reprice.
+// events and errors (missing_rate, multiple_unpriced_lines). Pricing goes through reprice().
 function world() {
   const orders = new Map<string, MemOrder>()
   const holds = new Map<string, 'held' | 'committed' | 'released'>()
@@ -77,8 +97,8 @@ function world() {
     if (o.tenantId !== tenantId) throw new ForbiddenError()
     return o
   }
-  const reprice = (o: MemOrder, actor: string): OrderStatus => {
-    const p = previewTotals(o.lines, { feeMinor: o.feeMinor, exchangeRate: o.exchangeRate, prepay: o.prepay })
+  const repriceOrder = (o: MemOrder, actor: string): OrderStatus => {
+    const p = reprice(o.lines, { feeMinor: o.feeMinor, exchangeRate: o.exchangeRate, prepay: o.prepay })
     o.subtotalMinor = p.subtotalMinor
     if (p.status === 'pending_quote') return o.status
     if (p.status === 'pending_shipping') {
@@ -105,17 +125,21 @@ function world() {
       calls.push('setShippingFee')
       const o = lock(tenantId, orderId)
       if (o.status !== 'pending_shipping' && o.status !== 'pending_quote') throw new InvalidOrderStateError('invalid_status')
+      if (o.currency !== 'HNL' && o.exchangeRate === null) throw new InvalidOrderStateError('missing_rate')
       o.feeMinor = feeMinor
-      return reprice(o, actor)
+      return repriceOrder(o, actor)
     },
     async setQuotedPrice(tenantId, orderId, priceMinor, actor) {
       calls.push('setQuotedPrice')
       const o = lock(tenantId, orderId)
       if (o.status !== 'pending_quote') throw new InvalidOrderStateError('invalid_status')
-      const first = o.lines.findIndex((l) => l.pendingQuote)
+      if (o.currency !== 'HNL' && o.exchangeRate === null) throw new InvalidOrderStateError('missing_rate')
+      const unpriced = o.lines.filter((l) => l.pendingQuote).length
+      if (unpriced === 0) throw new InvalidOrderStateError('invalid_status')
+      if (unpriced > 1) throw new InvalidOrderStateError('multiple_unpriced_lines')
       const total = o.exchangeRate === null ? priceMinor : Math.floor(priceMinor / o.exchangeRate + 0.5)
-      o.lines = o.lines.map((l, i) => (l.pendingQuote ? { ...l, pendingQuote: false, totalMinor: i === first ? total : 0 } : l))
-      return reprice(o, actor)
+      o.lines = o.lines.map((l) => (l.pendingQuote ? { ...l, pendingQuote: false, totalMinor: total } : l))
+      return repriceOrder(o, actor)
     },
     async submitProof(input) {
       calls.push('submitProof')
@@ -255,40 +279,6 @@ describe('setShippingFee', () => {
   })
 })
 
-describe('previewTotals (TS mirror of order_reprice)', () => {
-  const pct = (totalMinor: number, value: number): PricingLine => ({
-    totalMinor, pendingQuote: false, deposit: { kind: 'percent', value }, depositFixedMinor: null,
-  })
-
-  it('rounds each line deposit from its definition and converts the base-currency fee half up', () => {
-    expect(previewTotals([pct(1001, 30), pct(1001, 30)], { feeMinor: 150, exchangeRate: null, prepay: false })).toEqual({
-      status: 'awaiting_deposit', subtotalMinor: 2002, totalMinor: 2152, depositDueMinor: 600, dueOnDeliveryMinor: 1552,
-    })
-    expect(previewTotals([pct(400, 25)], { feeMinor: 1002, exchangeRate: 4, prepay: true })).toMatchObject({
-      totalMinor: 651, depositDueMinor: 351, dueOnDeliveryMinor: 300,
-    })
-  })
-
-  it('fixed deposits are capped at the line, full takes the line, none leaves pay on delivery', () => {
-    const fixed: PricingLine = { totalMinor: 500, pendingQuote: false, deposit: { kind: 'fixed', value: 1000 }, depositFixedMinor: 1000 }
-    const full: PricingLine = { totalMinor: 300, pendingQuote: false, deposit: { kind: 'full', value: 0 }, depositFixedMinor: null }
-    const none: PricingLine = { totalMinor: 800, pendingQuote: false, deposit: { kind: 'none', value: 0 }, depositFixedMinor: null }
-    expect(previewTotals([fixed, full], { feeMinor: 0, exchangeRate: null, prepay: false })).toMatchObject({ depositDueMinor: 800 })
-    expect(previewTotals([none], { feeMinor: 200, exchangeRate: null, prepay: false })).toMatchObject({
-      status: 'awaiting_review', totalMinor: 1000, depositDueMinor: 0,
-    })
-  })
-
-  it('an unpriced line keeps pending_quote; a missing fee gives pending_shipping', () => {
-    expect(previewTotals([{ ...pct(0, 30), pendingQuote: true }], { feeMinor: 100, exchangeRate: null, prepay: false }).status).toBe(
-      'pending_quote',
-    )
-    expect(previewTotals([pct(2000, 30)], { feeMinor: null, exchangeRate: null, prepay: false })).toMatchObject({
-      status: 'pending_shipping', subtotalMinor: 2000, totalMinor: null,
-    })
-  })
-})
-
 describe('setQuotedPrice', () => {
   it('prices the out-of-range line (base currency) and moves the order on', async () => {
     const w = world()
@@ -310,6 +300,25 @@ describe('setQuotedPrice', () => {
     const w = world()
     const o = w.add(pendingShipping())
     await expect(setQuotedPrice(OWNER_A, o.id, 5000, { store: w.store })).rejects.toBeInstanceOf(InvalidOrderStateError)
+  })
+
+  it('refuses an order with several unpriced lines (multiple_unpriced_lines) and changes nothing', async () => {
+    const w = world()
+    const unpriced: PricingLine = { totalMinor: 0, pendingQuote: true, deposit: { kind: 'percent', value: 30 }, depositFixedMinor: null }
+    const o = w.add(pendingShipping({ status: 'pending_quote', feeMinor: 0, lines: [{ ...unpriced }, { ...unpriced }] }))
+    await expect(setQuotedPrice(OWNER_A, o.id, 5000, { store: w.store })).rejects.toMatchObject({
+      name: 'InvalidOrderStateError', code: 'multiple_unpriced_lines',
+    })
+    expect([o.status, o.lines.every((l) => l.pendingQuote)]).toEqual(['pending_quote', true])
+  })
+
+  it('an order in another currency without a rate cannot be priced (missing_rate)', async () => {
+    const w = world()
+    const o = w.add(pendingShipping({ currency: 'USD', exchangeRate: null }))
+    await expect(setShippingFee(OWNER_A, o.id, 100, { store: w.store })).rejects.toMatchObject({
+      name: 'InvalidOrderStateError', code: 'missing_rate',
+    })
+    expect(o.status).toBe('pending_shipping')
   })
 })
 
@@ -365,11 +374,11 @@ describe('submitProof', () => {
     expect(w.calls).toEqual([])
   })
 
-  it('refuses an expired order, a 6 MB file and text/html, storing nothing', async () => {
+  it('refuses an expired order, a file over 4 MB and text/html, storing nothing', async () => {
     const { w, files, deps } = setup()
     const expired = w.add({ holdExpiresAt: new Date(NOW.getTime() - 1000).toISOString() })
     const live = w.add({})
-    const big = new Uint8Array(6 * 1024 * 1024)
+    const big = new Uint8Array(PROOF_MAX_BYTES + 1)
     big.set(PNG)
     const cases: [string, Uint8Array, string, string][] = [
       [expired.token, PNG, 'image/png', 'order_expired'],
@@ -389,7 +398,11 @@ describe('submitProof', () => {
     expect([expired.status, live.status]).toEqual(['awaiting_deposit', 'awaiting_deposit'])
   })
 
-  it('accepts exactly 5 MB and a JPEG declared as image/jpg', async () => {
+  it('the limit is 4 MB (under the 4.5 MB Vercel body cap)', () => {
+    expect(PROOF_MAX_BYTES).toBe(4 * 1024 * 1024)
+  })
+
+  it('accepts exactly 4 MB and a JPEG declared as image/jpg', async () => {
     const { w, deps } = setup()
     const a = w.add({})
     const b = w.add({})
@@ -513,6 +526,8 @@ describe('createSupabaseOrderOpsStore', () => {
       [{ code: 'P0001', message: 'invalid_status' }, 'InvalidOrderStateError', 'invalid_status'],
       [{ code: 'P0001', message: 'invalid_transition' }, 'InvalidOrderStateError', 'invalid_transition'],
       [{ code: 'P0001', message: 'no_proof' }, 'InvalidOrderStateError', 'no_proof'],
+      [{ code: 'P0001', message: 'missing_rate' }, 'InvalidOrderStateError', 'missing_rate'],
+      [{ code: 'P0001', message: 'multiple_unpriced_lines' }, 'InvalidOrderStateError', 'multiple_unpriced_lines'],
       [{ code: 'P0001', message: 'holds_released' }, 'HoldsReleasedError'],
       [{ code: 'P0001', message: 'order_unavailable' }, 'ProofRejectedError', 'order_unavailable'],
       [{ code: 'P0001', message: 'order_expired' }, 'ProofRejectedError', 'order_expired'],
@@ -529,14 +544,14 @@ describe('createSupabaseOrderOpsStore', () => {
     await expect(createSupabaseOrderOpsStore(client).approve(TENANT_A, 'o1', 'owner:u')).rejects.toBe(other)
   })
 
-  it('a quote for an order with several unpriced lines (22023) is InvalidOperationError invalid_input', async () => {
+  it('a quote for an order with several unpriced lines is InvalidOrderStateError multiple_unpriced_lines', async () => {
     const { client, calls } = fakeClient({
       data: null,
-      error: { code: '22023', message: 'one price cannot be split over several unpriced lines' },
+      error: { code: 'P0001', message: 'multiple_unpriced_lines' },
     })
     await expect(createSupabaseOrderOpsStore(client).setQuotedPrice(TENANT_A, 'o1', 1000, 'owner:u')).rejects.toMatchObject({
-      name: 'InvalidOperationError',
-      code: 'invalid_input',
+      name: 'InvalidOrderStateError',
+      code: 'multiple_unpriced_lines',
     })
     expect(calls).toEqual([
       { fn: 'set_quoted_price', args: { p_tenant: TENANT_A, p_order: 'o1', p_price_minor: 1000, p_actor: 'owner:u' } },

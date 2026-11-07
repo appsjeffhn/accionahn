@@ -1,22 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
-import { ForbiddenError } from '../auth/session'
-import {
-  ClosedDateError,
-  DailyLimitError,
-  NotBookableError,
-  OutsideHoursError,
-  SlotTakenError,
-  TooFarError,
-  TooSoonError,
-  bookSlot,
-  confirmBooking,
-  listAvailableSlots,
-  releaseBooking,
-  type CalendarDay,
-  type CalendarStore,
-} from './calendar'
-import { createSupabaseCalendarStore, parseRange } from './calendar.store'
+import { listAvailableSlots, type CalendarDay, type CalendarStore } from './calendar'
+import { parseRange } from './calendar.store'
 
 // Monday 2099-03-02 in America/Tegucigalpa (UTC-6, no DST).
 const DAY = '2099-03-02'
@@ -45,9 +29,6 @@ function spezia(overrides: Partial<CalendarDay> = {}): CalendarDay {
 function storeFor(day: CalendarDay): CalendarStore {
   return {
     loadDay: async () => day,
-    book: async () => 'b1',
-    release: async () => 0,
-    confirm: async () => 0,
   }
 }
 
@@ -171,74 +152,6 @@ describe('listAvailableSlots', () => {
   })
 })
 
-type Result = { data: unknown; error: { code: string; message: string } | null }
-
-function fakeClient(result: Result) {
-  const calls: { fn: string; args: Record<string, unknown> }[] = []
-  const client = {
-    rpc: async (fn: string, args: Record<string, unknown>) => {
-      calls.push({ fn, args })
-      return result
-    },
-  } as unknown as SupabaseClient
-  return { client, calls }
-}
-
-describe('createSupabaseCalendarStore', () => {
-  it('bookSlot calls book_slot and returns the booking id', async () => {
-    const { client, calls } = fakeClient({ data: 'bk-1', error: null })
-    const id = await bookSlot('A', 'p', null, '2099-03-02T15:00:00.000Z', 'o1', {
-      store: createSupabaseCalendarStore(client),
-    })
-    expect(id).toBe('bk-1')
-    expect(calls).toEqual([
-      {
-        fn: 'book_slot',
-        args: { p_tenant: 'A', p_product: 'p', p_resource: null, p_start: '2099-03-02T15:00:00.000Z', p_order: 'o1' },
-      },
-    ])
-  })
-
-  it('maps every booking error to its type', async () => {
-    const cases: [string, new () => Error][] = [
-      ['slot_taken', SlotTakenError],
-      ['daily_limit_reached', DailyLimitError],
-      ['outside_hours', OutsideHoursError],
-      ['closed_date', ClosedDateError],
-      ['too_soon', TooSoonError],
-      ['too_far', TooFarError],
-      ['not_bookable', NotBookableError],
-    ]
-    for (const [message, type] of cases) {
-      const { client } = fakeClient({ data: null, error: { code: 'P0001', message } })
-      await expect(
-        bookSlot('A', 'p', 'r1', '2099-03-02T15:00:00Z', 'o1', { store: createSupabaseCalendarStore(client) }),
-      ).rejects.toBeInstanceOf(type)
-    }
-  })
-
-  it('maps 42501 to ForbiddenError and rethrows anything else unchanged', async () => {
-    const forbidden = fakeClient({ data: null, error: { code: '42501', message: 'x' } })
-    await expect(
-      bookSlot('A', 'p', 'r1', '2099-03-02T15:00:00Z', 'o1', { store: createSupabaseCalendarStore(forbidden.client) }),
-    ).rejects.toBeInstanceOf(ForbiddenError)
-    const err = { code: 'P0001', message: 'something else' }
-    const other = fakeClient({ data: null, error: err })
-    await expect(
-      bookSlot('A', 'p', 'r1', '2099-03-02T15:00:00Z', 'o1', { store: createSupabaseCalendarStore(other.client) }),
-    ).rejects.toBe(err)
-  })
-
-  it('releaseBooking and confirmBooking call their functions and return the count', async () => {
-    const r = fakeClient({ data: 1, error: null })
-    expect(await releaseBooking('o1', { store: createSupabaseCalendarStore(r.client) })).toBe(1)
-    expect(r.calls[0]).toEqual({ fn: 'release_booking', args: { p_order: 'o1' } })
-    const c = fakeClient({ data: 2, error: null })
-    expect(await confirmBooking('o1', { store: createSupabaseCalendarStore(c.client) })).toBe(2)
-    expect(c.calls[0]).toEqual({ fn: 'confirm_booking', args: { p_order: 'o1' } })
-  })
-})
-
 describe('parseRange', () => {
   it('reads a PostgREST tstzrange into ISO bounds', () => {
     expect(parseRange('["2099-03-02 15:00:00+00","2099-03-02 18:00:00+00")')).toEqual({
@@ -249,15 +162,5 @@ describe('parseRange', () => {
       start: '2099-03-02T15:00:00.000Z',
       end: '2099-03-02T18:30:00.000Z',
     })
-  })
-})
-
-describe('bookSlot validation', () => {
-  it('requires an order id and a valid start without touching the store', async () => {
-    let touched = false
-    const store: CalendarStore = { ...storeFor(spezia()), book: async () => { touched = true; return 'x' } }
-    await expect(bookSlot('A', 'p', null, '2099-03-02T15:00:00Z', '', { store })).rejects.toThrow()
-    await expect(bookSlot('A', 'p', null, 'not a date', 'o1', { store })).rejects.toThrow()
-    expect(touched).toBe(false)
   })
 })

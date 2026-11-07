@@ -45,6 +45,16 @@ describe('message catalogs', () => {
     }
   })
 
+  it('the owner invitation tells "sent" from "set-password link resent"', () => {
+    for (const catalog of [es, en] as unknown as { wizard: { invite: Record<string, string> } }[]) {
+      expect(catalog.wizard.invite).toHaveProperty('sent')
+      expect(catalog.wizard.invite).toHaveProperty('resent')
+    }
+    expect((es as unknown as { wizard: { invite: { resent: string } } }).wizard.invite.resent).toBe(
+      'Se envió un enlace para establecer la contraseña.',
+    )
+  })
+
   it('have a store.errors message for every key the storefront can show', () => {
     for (const catalog of [es, en] as { store: { errors: Record<string, string> } }[]) {
       const missing = [...STORE_ERROR_KEYS, 'checkFields'].filter((k) => !(k in catalog.store.errors))

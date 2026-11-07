@@ -9,7 +9,15 @@ function roundHalfUp(n: number): number {
   return Math.floor(n + 0.5)
 }
 
+// Largest amount in minor units an order column holds (Postgres integer).
+export const MAX_MINOR = 2_147_483_647
+
 // `rate` is units of the base currency per 1 unit of the target currency.
+// TODO(multi-currency): not ready for real conversions. It ignores the currency
+// exponent (CLP/PYG have no minor unit, so a HNL->CLP conversion is 100x off) and does
+// not require a rate; SQL order_to_currency has the same gaps and rounds in numeric
+// while this rounds in float. createOrder only sells in the base currency until the
+// dedicated multi-currency task fixes both in one place.
 export function convertMinor(baseMinor: number, rate: number): number {
   return roundHalfUp(baseMinor / rate)
 }

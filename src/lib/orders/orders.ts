@@ -4,7 +4,7 @@ import { ForbiddenError } from '../auth/session'
 import { SlotTakenError, listAvailableSlots, localDay, type CalendarStore, type Slot } from '../calendar/calendar'
 import type { CatalogStore, StoreCatalog } from '../catalog/catalog'
 import { computeQuote } from '../pricing/engine'
-import { convertMinor } from '../pricing/money'
+import { convertMinor, MAX_MINOR } from '../pricing/money'
 import type {
   CartLine,
   ConfigurableDef,
@@ -38,7 +38,9 @@ export class QuoteRejectedError extends Error {
   }
 }
 
-// code: invalid_input, currency_not_enabled, product_unavailable, variant_required, start_required
+// code: invalid_input, currency_not_enabled, product_unavailable, variant_required, start_required,
+// multiple_quote_lines (more than one line beyond the last tier), amount_too_large (a line,
+// subtotal or total above MAX_MINOR), missing_rate (database: no rate for a foreign currency)
 export class InvalidOrderError extends Error {
   constructor(
     public readonly code: string,
@@ -176,28 +178,12 @@ export type OrderWrite = {
   lines: OrderLineWrite[]
 }
 
-export type PublicOrder = {
-  id: string
-  status: OrderStatus
-  currency: string
-  customerName: string
-  subtotalMinor: number
-  totalMinor: number | null
-  depositDueMinor: number | null
-  dueOnDeliveryMinor: number | null
-  shippingFeeMinor: number | null
-  holdExpiresAt: string | null
-  createdAt: string
-  lines: { productId: string; variantId: string | null; qty: number; totalMinor: number; snapshot: OrderLineSnapshot }[]
-}
-
 export type OrdersStore = {
   // Rates of the tenant's extra currencies (base units per 1 unit), from the wizard settings.
   loadRates: (tenantId: string) => Promise<Record<string, number>>
   // create_order: one transaction. Throws TooManyPendingOrdersError, InsufficientStockError,
   // the calendar errors, InvalidOrderError or ForbiddenError. Returns the order id.
   create: (write: OrderWrite) => Promise<string>
-  findByToken: (tenantId: string, token: string) => Promise<PublicOrder | null>
 }
 
 export type OrdersDeps = {
@@ -226,18 +212,9 @@ export function generatePublicToken(): string {
   return randomBytes(32).toString('base64url')
 }
 
-const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
-
-// The guest's view of one order. A malformed token, an unknown one and one of another
-// tenant all give the same null.
-export async function findOrderByToken(
-  tenantId: string,
-  token: string,
-  deps: Pick<OrdersDeps, 'orders'> = {},
-): Promise<PublicOrder | null> {
-  if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null
-  return (await resolveOrdersStore(deps.orders)).findByToken(tenantId, token)
-}
+// Shape of every token generatePublicToken makes; the one check used wherever a token
+// arrives from a URL or a form, before any lookup.
+export const PUBLIC_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
 // --- catalog rows -> engine types ----------------------------------------------------
 
@@ -317,10 +294,12 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
   const order = parsed.data
   if (tenant.status !== 'active') throw new ForbiddenError()
 
+  // Ruling: only the base currency sells for now, even an enabled extra currency. Selling
+  // in another one needs the multi-currency task first (TODO(multi-currency): currency
+  // exponent scaling in convertMinor/order_to_currency, a required rate, one rounding
+  // place shared by TS and SQL).
   const currency = order.currency ?? tenant.baseCurrency
-  if (currency !== tenant.baseCurrency && !tenant.enabledCurrencies.includes(currency)) {
-    throw new InvalidOrderError('currency_not_enabled')
-  }
+  if (currency !== tenant.baseCurrency) throw new InvalidOrderError('currency_not_enabled')
 
   const ordersStore = await resolveOrdersStore(deps.orders)
   const catalogStore = await resolveCatalogStore(deps.catalog)
@@ -332,8 +311,10 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
   const planned = order.lines.map((line) => {
     const product = products.get(line.productId)
     if (!product) throw new InvalidOrderError('product_unavailable')
-    const variants = catalog.variants.filter((v) => v.product_id === line.productId && v.active === true)
-    const variant = line.variantId ? variants.find((v) => v.id === line.variantId) : undefined
+    // Any variant, active or not, makes the product sellable only through an active one
+    // (same rule as create_order): a product whose variants are all inactive is not orderable.
+    const variants = catalog.variants.filter((v) => v.product_id === line.productId)
+    const variant = line.variantId ? variants.find((v) => v.id === line.variantId && v.active === true) : undefined
     if (line.variantId && !variant) throw new InvalidOrderError('product_unavailable')
     if (!line.variantId && variants.length > 0) throw new InvalidOrderError('variant_required')
 
@@ -386,6 +367,11 @@ export async function createOrder(tenant: Tenant, input: unknown, deps: OrdersDe
     }),
   )
   if (quote.errors.length > 0) throw new QuoteRejectedError(quote.errors)
+  // The owner sets one price per order (set_quoted_price), so only one line may need it.
+  if (quote.lines.filter((l) => l.depositMinor === null).length > 1) throw new InvalidOrderError('multiple_quote_lines')
+  // Order amounts are int4 columns: refuse here rather than fail inside the database.
+  const amounts = [...quote.lines.map((l) => l.totalMinor), quote.subtotalMinor, quote.totalMinor ?? 0]
+  if (amounts.some((a) => !Number.isSafeInteger(a) || a > MAX_MINOR)) throw new InvalidOrderError('amount_too_large')
 
   const rate = currency === tenant.baseCurrency ? null : (rates[currency] ?? null)
   const lines: OrderLineWrite[] = planned.map(({ line, product, variant, start, resourceId }, i) => {

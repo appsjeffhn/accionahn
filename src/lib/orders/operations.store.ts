@@ -14,7 +14,7 @@ import type { OrderStatus } from './states'
 
 type PgError = { code?: string; message?: string }
 
-const STATE_ERRORS = new Set(['invalid_status', 'invalid_transition', 'no_proof'])
+const STATE_ERRORS = new Set(['invalid_status', 'invalid_transition', 'no_proof', 'missing_rate', 'multiple_unpriced_lines'])
 const PROOF_ERRORS = new Set<ProofRejection>(['order_unavailable', 'order_not_awaiting_deposit', 'order_expired'])
 
 // 42501: order of another tenant. 22023: malformed input. P0001 carries the error name in
