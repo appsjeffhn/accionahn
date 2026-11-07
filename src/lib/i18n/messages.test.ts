@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import en from '../../../messages/en.json'
 import es from '../../../messages/es.json'
+import { ORDER_FIELD_KEYS } from '../agency/wizard-schema'
 import { ORDER_STATUSES } from '../orders/states'
 import { INPUT_FIELD_KEYS, NOTES_KEY, STORE_ERROR_KEYS } from '../store/checkout'
 
@@ -58,6 +59,13 @@ describe('message catalogs', () => {
       expect(store.order.statusHelp).toHaveProperty(s)
     }
     for (const k of [...INPUT_FIELD_KEYS, NOTES_KEY]) expect(store.fields).toHaveProperty(k)
+  })
+
+  it('label every order field key in the panel order detail, in es and en', () => {
+    for (const catalog of [es, en] as unknown as { panel: { orders: { fields: object } } }[]) {
+      const missing = [...ORDER_FIELD_KEYS, NOTES_KEY].filter((k) => !(k in catalog.panel.orders.fields))
+      expect(missing).toEqual([])
+    }
   })
 
   it('contain the login, agency and wizard namespaces', () => {

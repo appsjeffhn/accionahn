@@ -293,7 +293,9 @@
         "place": "Place",
         "address": "Address",
         "notes": "Notes",
-        "time": "Time"
+        "time": "Time",
+        "deposit": "Deposit",
+        "shipping_cost": "Shipping cost"
       },
       "lines": "Products",
       "unnamed": "Product",

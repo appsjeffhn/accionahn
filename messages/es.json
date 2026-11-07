@@ -293,7 +293,9 @@
         "place": "Lugar",
         "address": "Dirección",
         "notes": "Notas",
-        "time": "Hora"
+        "time": "Hora",
+        "deposit": "Anticipo",
+        "shipping_cost": "Costo de envío"
       },
       "lines": "Productos",
       "unnamed": "Producto",

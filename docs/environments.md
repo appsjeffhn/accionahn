@@ -91,13 +91,13 @@ El administrador de la agencia invita al dueño de una tienda **activa** desde *
 En cada proyecto de Supabase (staging y producción):
 
 1. **Correo (SMTP)**: **Authentication > Emails > SMTP Settings**, activa un SMTP propio (por ejemplo el de tu proveedor de correo). Sin SMTP propio Supabase solo envía unos pocos correos por hora y únicamente a miembros del equipo del proyecto, así que las invitaciones a clientes no llegarían.
-2. **Plantilla de invitación**: **Authentication > Emails > Templates > Invite user**. Reemplaza el enlace del cuerpo por `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite` (puedes copiar el texto de `supabase/templates/invite.html`). Con la plantilla original el enlace no funciona.
+2. **Plantilla de invitación**: **Authentication > Emails > Templates > Invite user**. Reemplaza el enlace del cuerpo por `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite` (puedes copiar el texto de `supabase/templates/invite.html`). Con la plantilla original el enlace no funciona. Haz lo mismo en **Reset password** con `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery` (texto en `supabase/templates/recovery.html`) para que el cambio de contraseña por correo también funcione.
 3. **Direcciones permitidas**: **Authentication > URL Configuration > Redirect URLs**, agrega `https://*.staging.accionahn.com/auth/callback` en staging y `https://*.accionahn.com/auth/callback` en producción. Si falta, el enlace del correo apunta a la *Site URL* y el dueño ve un error.
 4. **Registro abierto (obligatorio)**: en **Authentication > Sign In / Providers**, desactiva *Allow new users to sign up*. La aplicación no tiene registro público: los dueños entran solo por invitación y los administradores se crean como indica la sección 5. Las invitaciones siguen funcionando con el registro apagado. Así nadie puede crear por su cuenta una cuenta con el correo de un dueño antes de que lo invites (si aun así existiera una cuenta sin confirmar que no vino de una invitación, la aplicación la borra al invitar y crea una nueva). En local ya está apagado en `supabase/config.toml` (`enable_signup = false`).
 5. **Cambio de contraseña**: la página para crear la contraseña solo funciona durante 15 minutos después de abrir el enlace del correo; pasado ese tiempo hay que pedir una invitación nueva.
 6. Los intentos de inicio de sesión los limita Supabase Auth por IP (**Authentication > Rate Limits**); la aplicación no lleva su propio contador.
 
-En local no hace falta SMTP: los correos quedan en el buzón de prueba del Supabase local (Inbucket/Mailpit), en http://127.0.0.1:54324. La plantilla y la dirección permitida local (`http://*.accionahn.com:3000/auth/callback`) ya están en `supabase/config.toml`; tras cambiarlos hay que reiniciar con `pnpm exec supabase stop` y `pnpm exec supabase start`.
+En local no hace falta SMTP: los correos quedan en el buzón de prueba del Supabase local (Inbucket/Mailpit), en http://127.0.0.1:54324 (si arrancas Supabase con `-x` como en CI, no excluyas `mailpit`). La plantilla y las direcciones permitidas locales (`http://*.accionahn.com:3000/auth/callback` y, con `ROOT_DOMAIN=localhost`, `http://*.localhost:3000/auth/callback`, que no necesita tocar el archivo hosts) ya están en `supabase/config.toml`; tras cambiarlos hay que reiniciar con `pnpm exec supabase stop` y `pnpm exec supabase start`.
 
 ## 5. Crear el primer administrador de la agencia
 
@@ -109,6 +109,7 @@ Hay dos caminos. En local y staging se usa el script de semilla, que además cre
    - Define de la misma forma `APP_ENV`, `ROOT_DOMAIN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`. Para staging: `APP_ENV` = `staging`, `ROOT_DOMAIN` = `staging.accionahn.com`, las claves del proyecto staging y, además, `SEED_CONFIRM_URL` con exactamente la misma URL que `SUPABASE_URL` (confirmación de que apuntas al proyecto correcto).
 2. Ejecuta `pnpm seed:spezia`.
 3. El script crea el cliente `spezia` (cohorte `pilot`, moneda base HNL, USD a tasa 25, dominio `spezia.<ROOT_DOMAIN>`; en staging será `spezia.staging.accionahn.com`) y el administrador. Volver a ejecutarlo no duplica nada.
+   Además carga un **catálogo de ejemplo** para que la tienda se pueda probar de punta a punta: la taqueada (por persona, 3 carnes, 8 complementos, preparación 60 min y servicio 120 min, anticipo del 50 %), dos frascos de encurtidos con variantes y existencias, zonas de envío, dos recargos por fecha, envío "por aprobación", horario de 08:00 a 20:00 todos los días y datos de transferencia. **Todos esos valores son de ejemplo y llevan la palabra `EJEMPLO`** (en nombres, zonas, recargos, datos de transferencia y en el subtítulo de la tienda): no son los precios ni la cuenta reales de Spezia. El script solo crea lo que falta; si el dueño ya cambió algo (ajustes, horario, un producto, una zona), volver a ejecutarlo no lo pisa.
 4. Para el administrador de **producción**, el script no se usa: créalo a mano en el panel de Supabase del proyecto de producción (**Authentication > Users > Add user**, con *Auto Confirm User*) y luego, en **SQL Editor**, ejecuta `insert into public.agency_admins (user_id) select id from auth.users where email = '<correo>';`. Hazlo tú; no compartas la contraseña con nadie.
 5. Cambia el número de alerta del dueño de Spezia: el script usa uno falso (`+50400000000`). Por ahora el panel de la agencia no tiene un editor de ajustes para una tienda ya activa (llega en un plan posterior), así que el cambio se hace en el **SQL Editor** de Supabase del proyecto que corresponda. Reemplaza `<telefono-e164>` por el número real en formato E.164 (por ejemplo `+504` seguido de 8 dígitos) y `<slug>` por el subdominio de la tienda (`spezia`):
 
@@ -119,6 +120,20 @@ Hay dos caminos. En local y staging se usa el script de semilla, que además cre
    ```
 
    Debe decir `UPDATE 1`. Esto cambia solo el número de alerta; el resto de los ajustes de la tienda queda igual.
+
+## 6. Lista de verificación de staging (tienda)
+
+Antes de abrir la tienda de Spezia a clientes reales, en el proyecto de **staging** y después en el de producción:
+
+1. **Buckets de Storage** (sección 4):
+   - `tenant-assets`: **público**, 1 MB, tipos `image/png, image/jpeg, image/webp` (sin SVG).
+   - `order-proofs`: **privado**, 5 MB, tipos `image/jpeg, image/png, image/webp, application/pdf`. En el plan aparece como "payment-proofs"; en el código se llama `order-proofs` (`ORDER_PROOFS_BUCKET`) y ese es el nombre que hay que usar.
+2. **`CRON_SECRET`** en Vercel (Preview y Production, uno distinto en cada uno, 32 caracteres o más). La tarea de vencimiento corre cada 15 minutos, y eso **requiere el plan Pro de Vercel** (en Hobby solo corre una vez al día y los pedidos sin anticipo tardarían hasta un día en liberarse). Comprueba en **Vercel > Settings > Cron Jobs** que aparece `/api/cron/expire-orders` y, tras 15 minutos, que su última ejecución respondió 200.
+3. **Correo y acceso** (sección 4, "Invitación del dueño"): SMTP propio, plantilla de invitación con `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite`, la dirección `https://*.<dominio>/auth/callback` en **Redirect URLs** y *Allow new users to sign up* **apagado**. Prueba una invitación real: el correo llega, el enlace abre la tienda, se crea la contraseña y se entra a `/panel`. Abre el mismo enlace otra vez: debe mostrar "El enlace no es válido o ya venció".
+4. **Tipo de los archivos guardados**: sube un logo PNG en **Panel > Apariencia** y abre su URL pública. En las herramientas del navegador (pestaña Red) o con `curl -I <url>` revisa que la respuesta traiga `Content-Type: image/png` y `X-Content-Type-Options: nosniff`. Si falta `nosniff` o el tipo no es el correcto, avisa al equipo técnico antes de abrir la tienda.
+5. **Comprobante de pago de punta a punta** (no se puede probar en local porque Storage no corre allí): haz un pedido de prueba, pon el costo de envío en el panel, sube una foto como comprobante desde el enlace del pedido, comprueba que aparece en `order-proofs/<tenant_id>/<order_id>/...`, que el panel la abre con un enlace firmado, y aprueba el pedido. Prueba también rechazar uno y que el cliente pueda subir otro.
+6. **Datos reales de Spezia**: el dueño entra a su panel y reemplaza todo lo que dice `EJEMPLO`: precios por persona y rangos, carnes y complementos con sus extras, anticipo, frascos y existencias (**Productos**); horario y días cerrados (**Calendario**); modo de envío, zonas, recargos por fecha y **datos de transferencia** (**Ajustes**); subtítulo de la tienda (**Apariencia**). Revisa la tienda pública y busca la palabra `EJEMPLO`: no debe quedar ninguna. En producción el script de semilla no corre, así que allí los datos se cargan directamente desde el panel.
+7. Borra los pedidos y usuarios de prueba que hayas creado en staging.
 
 ## Qué hace cada quien
 
