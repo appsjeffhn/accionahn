@@ -1,0 +1,114 @@
+{
+  "app": {
+    "name": "Accionahn"
+  },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "invalidCredentials": "Incorrect email or password.",
+    "forgotPassword": "Forgot your password?"
+  },
+  "agency": {
+    "title": "Agency panel",
+    "tenants": "Stores",
+    "newTenant": "New store",
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "empty": "There are no stores yet.",
+    "name": "Name",
+    "slug": "Subdomain",
+    "statusLabel": "Status",
+    "cohortLabel": "Cohort",
+    "cohort": {
+      "pilot": "Pilot",
+      "general": "General"
+    },
+    "configure": "Configure",
+    "nav": {
+      "requests": "Client requests",
+      "releases": "Releases"
+    },
+    "requests": {
+      "title": "Client requests",
+      "empty": "There are no requests.",
+      "business": "Business",
+      "email": "Email",
+      "country": "Country",
+      "statusLabel": "Status",
+      "approve": "Approve",
+      "reject": "Reject",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "approvedNoTenant": "Approved, no store",
+        "approving": "Approving..."
+      },
+      "retryApprove": "Retry approval",
+      "configure": "Configure store"
+    },
+    "releases": {
+      "title": "Releases",
+      "empty": "No flags yet.",
+      "key": "Flag",
+      "rollout": "Rollout",
+      "apply": "Apply",
+      "newKey": "New flag key",
+      "create": "Create flag",
+      "options": {
+        "off": "Off",
+        "pilot": "Pilot",
+        "all": "Everyone"
+      }
+    }
+  },
+  "wizard": {
+    "title": "Create store",
+    "next": "Next",
+    "back": "Back",
+    "finish": "Finish",
+    "fields": {
+      "name": "Store name",
+      "slug": "Web address",
+      "defaultLocale": "Default language",
+      "baseCurrency": "Base currency",
+      "extraCurrency": "Extra currency",
+      "extraMode": "Pricing",
+      "modeManual": "Manual price",
+      "modeRate": "Exchange rate",
+      "rate": "Exchange rate (1 extra = X base)",
+      "ownerAlertPhone": "Owner phone for alerts (+504...)",
+      "orderFields": "Order details",
+      "required": "Required",
+      "whatsappMode": "WhatsApp mode",
+      "aiCapCents": "Monthly AI cap (cents)",
+      "retentionMonths": "Retention (months)",
+      "none": "None"
+    },
+    "errors": {
+      "required": "This field is required.",
+      "slugTaken": "That address is already in use.",
+      "invalid": "Invalid value.",
+      "slugInvalid": "Use 3 to 40 lowercase letters, digits or hyphens, with no leading or trailing hyphen.",
+      "slugReserved": "That address is reserved.",
+      "currencyInvalid": "Unsupported currency.",
+      "currencyDuplicate": "Repeated currency or same as the base.",
+      "rateInvalid": "Enter an exchange rate greater than 0.",
+      "phoneInvalid": "Use international format, for example +50499999999.",
+      "notPending": "This store was already set up."
+    },
+    "orderKeys": {
+      "place": "Place",
+      "date": "Date",
+      "time": "Time",
+      "address": "Address",
+      "deposit": "Deposit",
+      "shipping_cost": "Shipping cost"
+    }
+  }
+}

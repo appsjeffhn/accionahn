@@ -1,0 +1,114 @@
+{
+  "app": {
+    "name": "Accionahn"
+  },
+  "login": {
+    "title": "Iniciar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "submit": "Entrar",
+    "invalidCredentials": "Correo o contraseña incorrectos.",
+    "forgotPassword": "¿Olvidaste tu contraseña?"
+  },
+  "agency": {
+    "title": "Panel de agencia",
+    "tenants": "Tiendas",
+    "newTenant": "Nueva tienda",
+    "status": {
+      "pending": "Pendiente",
+      "active": "Activa",
+      "suspended": "Suspendida"
+    },
+    "empty": "Aún no hay tiendas.",
+    "name": "Nombre",
+    "slug": "Subdominio",
+    "statusLabel": "Estado",
+    "cohortLabel": "Cohorte",
+    "cohort": {
+      "pilot": "Piloto",
+      "general": "General"
+    },
+    "configure": "Configurar",
+    "nav": {
+      "requests": "Solicitudes de clientes",
+      "releases": "Liberaciones"
+    },
+    "requests": {
+      "title": "Solicitudes de clientes",
+      "empty": "No hay solicitudes.",
+      "business": "Negocio",
+      "email": "Correo",
+      "country": "País",
+      "statusLabel": "Estado",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "status": {
+        "pending": "Pendiente",
+        "approved": "Aprobada",
+        "rejected": "Rechazada",
+        "approvedNoTenant": "Aprobada sin tienda",
+        "approving": "Aprobando..."
+      },
+      "retryApprove": "Reintentar aprobación",
+      "configure": "Configurar tienda"
+    },
+    "releases": {
+      "title": "Liberaciones",
+      "empty": "Aún no hay flags.",
+      "key": "Flag",
+      "rollout": "Alcance",
+      "apply": "Aplicar",
+      "newKey": "Clave del nuevo flag",
+      "create": "Crear flag",
+      "options": {
+        "off": "Apagado",
+        "pilot": "Piloto",
+        "all": "Todos"
+      }
+    }
+  },
+  "wizard": {
+    "title": "Crear tienda",
+    "next": "Siguiente",
+    "back": "Atrás",
+    "finish": "Finalizar",
+    "fields": {
+      "name": "Nombre de la tienda",
+      "slug": "Dirección web",
+      "defaultLocale": "Idioma por defecto",
+      "baseCurrency": "Moneda base",
+      "extraCurrency": "Moneda extra",
+      "extraMode": "Precio",
+      "modeManual": "Precio manual",
+      "modeRate": "Tipo de cambio",
+      "rate": "Tipo de cambio (1 extra = X base)",
+      "ownerAlertPhone": "Teléfono del dueño para avisos (+504...)",
+      "orderFields": "Datos del pedido",
+      "required": "Obligatorio",
+      "whatsappMode": "Modo de WhatsApp",
+      "aiCapCents": "Tope mensual de IA (centavos)",
+      "retentionMonths": "Retención (meses)",
+      "none": "Ninguna"
+    },
+    "errors": {
+      "required": "Este campo es obligatorio.",
+      "slugTaken": "Esa dirección ya está en uso.",
+      "invalid": "Valor no válido.",
+      "slugInvalid": "Usa 3 a 40 letras minúsculas, números o guiones, sin guion al inicio ni al final.",
+      "slugReserved": "Esa dirección está reservada.",
+      "currencyInvalid": "Moneda no soportada.",
+      "currencyDuplicate": "Moneda repetida o igual a la base.",
+      "rateInvalid": "Ingresa un tipo de cambio mayor que 0.",
+      "phoneInvalid": "Usa el formato internacional, por ejemplo +50499999999.",
+      "notPending": "Esta tienda ya fue configurada."
+    },
+    "orderKeys": {
+      "place": "Lugar",
+      "date": "Fecha",
+      "time": "Hora",
+      "address": "Dirección",
+      "deposit": "Depósito",
+      "shipping_cost": "Costo de envío"
+    }
+  }
+}

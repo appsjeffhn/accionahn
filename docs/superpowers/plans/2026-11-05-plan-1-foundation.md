@@ -42,13 +42,48 @@ src/lib/i18n/{locale.ts,config.ts}   messages/{es.json,en.json}
 src/lib/agency/{requests.ts,wizard-schema.ts,wizard.ts}
 src/lib/flags/{flags.ts,actions.ts}
 src/lib/botconfig/versions.ts
+src/lib/supabase/{service.ts,service-core.ts}  # cliente service_role (service.ts con 'server-only'; service-core solo para scripts)
+src/lib/routing/decide-request.ts             # decisión pura del middleware (host, 404, headers x-tenant-*)
 src/middleware.ts
-src/app/(agency)/agency/...     # panel de agencia
-src/app/(owner)/panel/...       # shell del panel del cliente (vacío salvo layout)
+src/app/(agency)/agency/...     # panel de agencia (solo en app.<ROOT_DOMAIN>)
 supabase/migrations/*.sql   supabase/tests/*.sql
 scripts/{seed-spezia.ts,check-migration-safety.ts}
 .github/workflows/ci.yml
 ```
+
+> **Nota (estado real al cerrar el Plan 1):** `src/app/(owner)/panel` NO se creó. Las rutas `/panel/*` ya están protegidas (solo en hosts de tienda activos, solo para el dueño de esa tienda) pero no hay páginas; el panel del cliente llega en un plan posterior. `/agency/*` solo existe en `app.<ROOT_DOMAIN>` (404 en hosts de tienda) y `/panel/*` da 404 en `app.<ROOT_DOMAIN>`.
+
+### Migraciones usadas en el Plan 1
+
+Los números de migración que mencionan las tareas de abajo (000002, 000003, 000004) eran tentativos. Los archivos reales son estos; un plan nuevo debe numerar después de `20261106000014`.
+
+| Archivo | Contenido |
+|---|---|
+| `20261106000001_tenancy.sql` | Task 2: tablas de tenancy, helpers y RLS |
+| `20261106000005_tenants_guard.sql` | Task 2: trigger que protege id/slug/status/cohort |
+| `20261106000006_client_requests.sql` | Task 6: solicitudes de clientes |
+| `20261106000007_client_requests_recovery.sql` | Task 6: `approved_at` y grants de inserción por columna |
+| `20261106000008_wizard_domain_fns.sql` | Task 7: RPC `wizard_set_subdomain` / `wizard_remove_subdomain` |
+| `20261106000009_feature_flags.sql` | Task 8: flags, auditoría y `set_feature_flag` |
+| `20261106000010_feature_flag_audit_actor.sql` | Task 8: actor de auditoría |
+| `20261106000011_bot_config_versions.sql` | Task 9: configuración del bot versionada |
+| `20261106000012_bot_config_service_grants.sql` | Task 9: grants explícitos de service_role |
+| `20261106000013_tenant_settings_guard.sql` | Revisión final: ajustes solo de agencia (`aiCapCents`, `whatsappMode`, `retentionMonths`) y CHECK de formato de monedas |
+| `20261106000014_explicit_grants.sql` | Revisión final: grants mínimos explícitos en todas las tablas de `public` |
+
+Regla para tablas nuevas: Supabase da por defecto ALL a `anon`, `authenticated` y `service_role`; cada migración que cree una tabla debe hacer `revoke all` y conceder solo lo necesario (como en 000014).
+
+### Deferred to later plans
+
+- Página de login y flujo de invitación/alta del dueño (owner invite/claim).
+- Formulario público de solicitud de clientes en el apex/`www` (hoy solo hay host de agencia y hosts de tienda).
+- Overrides de flags por tienda (no solo por cohorte).
+- Edición del tope de IA desde la agencia y, posiblemente, una tabla aparte de límites (hoy `aiCapCents` vive en `tenants.settings`, protegido por trigger).
+- Editor de ajustes de la tienda en el panel de agencia (hoy el número de alerta se cambia por SQL, ver `docs/environments.md` paso 5).
+- Caché del lookup de tenant en el middleware y matcher que excluya assets estáticos.
+- Helper `requirePanelSession` que compare el tenant de la sesión con el del host en Server Components.
+- Renombrar `middleware` a `proxy` (Next 16 lo marca como obsoleto).
+- Hosts locales de desarrollo (`ROOT_DOMAIN=localhost`, p. ej. `app.localhost` y `<slug>.localhost`).
 
 ---
 
@@ -135,7 +170,7 @@ scripts/{seed-spezia.ts,check-migration-safety.ts}
 ### Task 6: Solicitudes de clientes y aprobación
 
 **Files:**
-- Create: `supabase/migrations/20261106000002_client_requests.sql`, `src/lib/agency/requests.ts`, `src/app/(agency)/agency/requests/page.tsx`
+- Create: `supabase/migrations/20261106000002_client_requests.sql` (real: `000006` y `000007`), `src/lib/agency/requests.ts`, `src/app/(agency)/agency/requests/page.tsx`
 - Test: `supabase/tests/rls_requests.test.sql`, `src/lib/agency/requests.test.ts`
 
 **Interfaces:**
@@ -167,7 +202,7 @@ scripts/{seed-spezia.ts,check-migration-safety.ts}
 ### Task 8: Flags de liberación por cohorte
 
 **Files:**
-- Create: `supabase/migrations/20261106000003_feature_flags.sql`, `src/lib/flags/flags.ts`, `src/lib/flags/actions.ts`, `src/app/(agency)/agency/releases/page.tsx`
+- Create: `supabase/migrations/20261106000003_feature_flags.sql` (real: `000009` y `000010`), `src/lib/flags/flags.ts`, `src/lib/flags/actions.ts`, `src/app/(agency)/agency/releases/page.tsx`
 - Test: `supabase/tests/rls_flags.test.sql`, `src/lib/flags/flags.test.ts`
 
 **Interfaces:**
@@ -183,7 +218,7 @@ scripts/{seed-spezia.ts,check-migration-safety.ts}
 ### Task 9: Configuración del bot versionada
 
 **Files:**
-- Create: `supabase/migrations/20261106000004_bot_config_versions.sql`, `src/lib/botconfig/versions.ts`
+- Create: `supabase/migrations/20261106000004_bot_config_versions.sql` (real: `000011` y `000012`), `src/lib/botconfig/versions.ts`
 - Test: `supabase/tests/bot_config.test.sql`, `src/lib/botconfig/versions.test.ts`
 
 **Interfaces:**
@@ -211,5 +246,5 @@ scripts/{seed-spezia.ts,check-migration-safety.ts}
 - [ ] **Step 3: Implement** `checkMigrationSafety` y el script que lo aplica a las migraciones; agregar el job al CI.
 - [ ] **Step 4: Implement** `seed-spezia.ts`: crea el tenant Spezia con cohorte `pilot`, moneda base `HNL`, extra `USD`, y el primer usuario administrador de la agencia; solo corre con `APP_ENV` `local` o `staging` y aborta en `production`.
 - [ ] **Step 5: Documentar** en `docs/environments.md` los dos proyectos de Supabase (staging y producción), los dos entornos de Vercel y el wildcard `*.accionahn.com` (la configuración en Vercel y Supabase la hace el dueño; la guía lo explica paso a paso).
-- [ ] **Step 6: Run** `pnpm vitest run` y `supabase db reset && pnpm tsx scripts/seed-spezia.ts`. Expected: PASS y el tenant `spezia` existe en la base local.
+- [ ] **Step 6: Run** `pnpm vitest run` y `supabase db reset && pnpm seed:spezia` (el script usa `tsx --conditions=react-server`; un `tsx` directo falla por el guard `server-only`). Expected: PASS y el tenant `spezia` existe en la base local.
 - [ ] **Step 7: Commit** `feat: spezia seed, environments doc and migration safety check`.
