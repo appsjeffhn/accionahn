@@ -22,4 +22,17 @@ describe('parseEnv', () => {
   it('devuelve el entorno con valores validos', () => {
     expect(parseEnv(valid).ROOT_DOMAIN).toBe('accionahn.com')
   })
+
+  it('CRON_SECRET es opcional en local', () => {
+    expect(parseEnv(valid).CRON_SECRET).toBeUndefined()
+    expect(parseEnv({ ...valid, CRON_SECRET: '' }).CRON_SECRET).toBeUndefined()
+  })
+
+  it('sin CRON_SECRET o con uno corto el entorno sigue siendo valido en staging y produccion (lo valida solo la ruta cron)', () => {
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(parseEnv({ ...valid, APP_ENV }).CRON_SECRET).toBeUndefined()
+      expect(parseEnv({ ...valid, APP_ENV, CRON_SECRET: 'short' }).CRON_SECRET).toBe('short')
+      expect(parseEnv({ ...valid, APP_ENV, CRON_SECRET: 'a'.repeat(32) }).CRON_SECRET).toBe('a'.repeat(32))
+    }
+  })
 })

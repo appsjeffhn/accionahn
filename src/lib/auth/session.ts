@@ -49,9 +49,14 @@ export type CookieAdapter = {
   ) => void
 }
 
+// Every server-side Supabase client (pages, actions, route handlers, middleware, the auth
+// callback) goes through here. The app has no browser Supabase client, so the session
+// cookies are httpOnly (no script can read the tokens), SameSite=Lax, and Secure outside
+// local (local runs on plain http).
 export function createUserClient(cookies: CookieAdapter): SupabaseClient {
   const env = parseEnv(process.env)
   return createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    cookieOptions: { httpOnly: true, sameSite: 'lax', secure: env.APP_ENV !== 'local' },
     cookies: {
       getAll: () => cookies.getAll(),
       setAll: (list) => cookies.setAll?.(list),
@@ -93,12 +98,22 @@ export async function readSession(
   })
 }
 
-export async function getSession(): Promise<Session | null> {
+// Supabase client bound to the request cookies (Server Components, Server Actions, Route
+// Handlers). Cookies written during the request are also kept in a local overlay, so a
+// read right after sign in sees the new session even where the cookie store cannot be
+// read back.
+export async function getUserClient(): Promise<SupabaseClient> {
   const { cookies } = await import('next/headers')
   const store = await cookies()
-  const supabase = createUserClient({
-    getAll: () => store.getAll(),
+  const written = new Map<string, string>()
+  return createUserClient({
+    getAll: () => {
+      const merged = new Map(store.getAll().map((c) => [c.name, c.value]))
+      written.forEach((value, name) => merged.set(name, value))
+      return [...merged].filter(([, value]) => value !== '').map(([name, value]) => ({ name, value }))
+    },
     setAll: (list) => {
+      list.forEach(({ name, value }) => written.set(name, value))
       try {
         list.forEach(({ name, value, options }) => store.set(name, value, options))
       } catch {
@@ -106,5 +121,8 @@ export async function getSession(): Promise<Session | null> {
       }
     },
   })
-  return readSession(supabase)
+}
+
+export async function getSession(): Promise<Session | null> {
+  return readSession(await getUserClient())
 }

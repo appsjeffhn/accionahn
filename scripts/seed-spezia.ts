@@ -1,12 +1,16 @@
 // Run with `pnpm seed:spezia`: the script passes --conditions=react-server so the
 // server-only guard on the service-role stores resolves to its empty module in this
 // trusted Node script (a plain `tsx scripts/seed-spezia.ts` fails on that guard).
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createSupabaseCatalogStore } from '../src/lib/catalog/catalog.store'
+import { parseEnv } from '../src/lib/env'
+import { createSupabaseSetupStore } from '../src/lib/store/setup.store'
 import { createServiceClient } from '../src/lib/supabase/service-core'
 import { completeWizard } from '../src/lib/agency/wizard'
 import { wizardInputSchema } from '../src/lib/agency/wizard-schema'
 import { createSupabaseWizardStore } from '../src/lib/agency/wizard.store'
 import { assertSeedAllowed } from './seed-guard'
+import { seedSpeziaCatalog } from './seed-spezia-catalog'
 
 const SLUG = 'spezia'
 
@@ -87,6 +91,32 @@ async function main(): Promise<void> {
 
   console.log(`Tenant '${SLUG}': ${tenant.created ? 'created' : 'already existed'} (cohort pilot).`)
   console.log(`Agency admin: ${adminCreated ? 'created' : 'already existed'}.`)
+
+  // Date rules, zones and the calendar tables are not writable by service_role: they are
+  // written as the agency admin, under the same RLS policies the panel uses.
+  const admin = await signInAsAdmin(process.env.SEED_ADMIN_EMAIL as string, process.env.SEED_ADMIN_PASSWORD as string)
+  try {
+    const { created } = await seedSpeziaCatalog(tenant.id, {
+      env: process.env,
+      catalog: createSupabaseCatalogStore(supabase),
+      setup: createSupabaseSetupStore(admin),
+    })
+    const list = Object.entries(created).map(([k, n]) => `${k} ${n}`).join(', ')
+    console.log(`Example catalog (EJEMPLO values, not real data). New rows: ${list}.`)
+  } finally {
+    await admin.auth.signOut()
+  }
+}
+
+async function signInAsAdmin(email: string, password: string): Promise<SupabaseClient> {
+  const env = parseEnv(process.env)
+  const client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error } = await client.auth.signInWithPassword({ email, password })
+  // Never echo the credentials: only say which step failed.
+  if (error) throw new Error('Seed aborted: could not sign in as the seed admin (check SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD).')
+  return client
 }
 
 main().catch((e) => {

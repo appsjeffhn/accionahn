@@ -27,6 +27,8 @@ export async function middleware(request: NextRequest) {
   })
 }
 
+// /api/cron/* is skipped: Vercel Cron calls the deployment host, which is neither a tenant
+// nor the agency host, and those routes authenticate with their own bearer secret.
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/cron/).*)'],
 }
