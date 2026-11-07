@@ -47,8 +47,13 @@ export async function runGate(args: {
   if (!canAccess(path, session, hostTenantId)) {
     // Anonymous on a real area: send to the sign-in page of this same host.
     // The next value is the plain pathname; /login validates it again before use.
+    // Built on the request URL's own origin on purpose: Next's middleware adapter turns a
+    // same-origin Location into a relative one before it leaves the server, so the
+    // browser stays on the tenant host it asked even when that origin is the server's own
+    // hostname (next start). A literal relative Location cannot be set here: the adapter
+    // parses it with new URL() and would throw.
     if (!session && areaOf(path) !== 'invalid') {
-      const login = new URL('/login', request.nextUrl.origin)
+      const login = new URL('/login', request.url)
       login.searchParams.set('next', path)
       return finish(NextResponse.redirect(login))
     }

@@ -12,7 +12,8 @@ const MAX_USER_PAGES = 20
 
 // Table reads and writes run as the signed-in agency admin, so RLS (is_agency_admin)
 // still applies; service_role has no grant on memberships at all. The service client
-// is used only for the Auth admin API (find, delete self-signups, send the invitation).
+// is used only for Auth (find, delete self-signups, send the invitation or the
+// set-password link).
 export async function createSupabaseOwnerInviteStore(
   db?: SupabaseClient,
   admin: SupabaseClient = createServiceClient(),
@@ -83,6 +84,13 @@ export async function createSupabaseOwnerInviteStore(
       if (error) throw error
       if (!data.user) throw new Error('Invitation returned no user')
       return { id: data.user.id }
+    },
+
+    // Public recover endpoint: Auth sends the Reset password template, whose link is
+    // {{ .RedirectTo }}?token_hash=...&type=recovery (docs/environments.md).
+    async sendPasswordSetup(email, redirectTo) {
+      const { error } = await admin.auth.resetPasswordForEmail(email, { redirectTo })
+      if (error) throw error
     },
 
     async insertOwnerMembership(userId, tenantId) {

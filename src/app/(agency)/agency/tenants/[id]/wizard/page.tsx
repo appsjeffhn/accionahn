@@ -83,8 +83,9 @@ export default async function WizardPage({
     const session = await getSession();
     const requestHeaders = await headers();
     const email = formData.get("email");
+    let result: Awaited<ReturnType<typeof inviteOwner>>;
     try {
-      await inviteOwner(session, id, typeof email === "string" ? email : "", {
+      result = await inviteOwner(session, id, typeof email === "string" ? email : "", {
         callbackUrl: callbackUrlFor({
           appEnv: parseEnv(process.env).APP_ENV,
           host: requestHeaders.get("host"),
@@ -101,7 +102,7 @@ export default async function WizardPage({
       }
       return { status: "error", error: key };
     }
-    return { status: "sent" };
+    return { status: result === "resent" ? "resent" : "sent" };
   }
 
   const inviteForm = (
@@ -113,6 +114,7 @@ export default async function WizardPage({
         email: t("invite.email"),
         submit: t("invite.submit"),
         sent: t("invite.sent"),
+        resent: t("invite.resent"),
         errors: Object.fromEntries(
           INVITE_ERROR_KEYS.map((k) => [k, t(`invite.errors.${k}`)]),
         ),

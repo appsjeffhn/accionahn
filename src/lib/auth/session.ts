@@ -49,9 +49,14 @@ export type CookieAdapter = {
   ) => void
 }
 
+// Every server-side Supabase client (pages, actions, route handlers, middleware, the auth
+// callback) goes through here. The app has no browser Supabase client, so the session
+// cookies are httpOnly (no script can read the tokens), SameSite=Lax, and Secure outside
+// local (local runs on plain http).
 export function createUserClient(cookies: CookieAdapter): SupabaseClient {
   const env = parseEnv(process.env)
   return createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    cookieOptions: { httpOnly: true, sameSite: 'lax', secure: env.APP_ENV !== 'local' },
     cookies: {
       getAll: () => cookies.getAll(),
       setAll: (list) => cookies.setAll?.(list),

@@ -26,7 +26,7 @@ vi.mock('@/lib/auth/session', () => ({
   }),
 }))
 
-const { GET } = await import('./route')
+const { GET, POST } = await import('./route')
 
 // The request URL is what `next start` gives a route handler: the server's own host,
 // while the browser asked the tenant host.
@@ -36,8 +36,25 @@ function request(query: string, tenantId: string | null = 'tenant-1'): NextReque
   return new NextRequest(`http://localhost:3000/auth/callback?${query}`, { headers })
 }
 
-function expectCommonHeaders(res: Response) {
-  expect(res.status).toBe(307)
+// The confirm button's POST: the form fields, sent by the browser from the same host.
+function post(
+  fields: Record<string, string>,
+  opts: { origin?: string | null; tenantId?: string | null } = {},
+): NextRequest {
+  const headers = new Headers({ host: 'spezia.localhost:3000', 'content-type': 'application/x-www-form-urlencoded' })
+  const tenantId = opts.tenantId === undefined ? 'tenant-1' : opts.tenantId
+  if (tenantId) headers.set('x-tenant-id', tenantId)
+  const origin = opts.origin === undefined ? 'http://spezia.localhost:3000' : opts.origin
+  if (origin) headers.set('origin', origin)
+  return new NextRequest('http://localhost:3000/auth/callback', {
+    method: 'POST',
+    headers,
+    body: new URLSearchParams(fields).toString(),
+  })
+}
+
+function expectRedirect(res: Response, status: number) {
+  expect(res.status).toBe(status)
   expect(res.headers.get('cache-control')).toBe('no-store')
   expect(res.headers.get('referrer-policy')).toBe('no-referrer')
 }
@@ -48,39 +65,93 @@ beforeEach(() => {
   sessionCookies = [{ name: 'sb-127-auth-token', value: 'session', options: { path: '/', sameSite: 'lax' } }]
 })
 
-describe('GET /auth/callback', () => {
-  it('a valid invite token redirects to the relative set-password path with the session cookie', async () => {
-    const res = await GET(request('token_hash=abc&type=invite'))
-    expectCommonHeaders(res)
+describe('GET /auth/callback with an emailed token (scanner-safe)', () => {
+  it('does not use the token: it answers a small confirm page that POSTs it back', async () => {
+    const res = await GET(request('token_hash=abc&type=invite&next=%2Fpanel%2Forders'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/^text\/html/)
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(res.headers.get('x-robots-tag')).toMatch(/noindex/)
+    expect(res.headers.get('set-cookie')).toBeNull()
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+    const html = await res.text()
+    expect(html).toContain('<form method="post" action="/auth/callback">')
+    expect(html).toContain('<input type="hidden" name="token_hash" value="abc">')
+    expect(html).toContain('<input type="hidden" name="type" value="invite">')
+    expect(html).toContain('<input type="hidden" name="next" value="/panel/orders">')
+    expect(html).toContain('<button type="submit"')
+    expect(html).not.toContain('<script')
+  })
+
+  it('escapes what it echoes and drops a hostile next', async () => {
+    const res = await GET(request(`token_hash=${encodeURIComponent('"><img src=x>')}&type=recovery&next=${encodeURIComponent('//evil.example')}`))
+    const html = await res.text()
+    expect(html).not.toContain('<img')
+    expect(html).toContain('value="&quot;&gt;&lt;img src=x&gt;"')
+    expect(html).toContain('<input type="hidden" name="next" value="/panel">')
+  })
+
+  it('a malformed token link still redirects to /login?error=link without a page', async () => {
+    const res = await GET(request('type=invite'))
+    expectRedirect(res, 307)
+    expect(res.headers.get('location')).toBe('/login?error=link')
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /auth/callback (the confirm button)', () => {
+  it('a valid invite token redirects (303) to the relative set-password path with the session cookie', async () => {
+    const res = await POST(post({ token_hash: 'abc', type: 'invite' }))
+    expectRedirect(res, 303)
     expect(res.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
     expect(res.headers.get('set-cookie')).toContain('sb-127-auth-token=session')
     expect(auth.verifyOtp).toHaveBeenCalledWith({ type: 'invite', token_hash: 'abc' })
   })
 
   it('a valid recovery token goes to the same relative path', async () => {
-    const res = await GET(request('token_hash=abc&type=recovery'))
+    const res = await POST(post({ token_hash: 'abc', type: 'recovery' }))
     expect(res.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
-  })
-
-  it('a valid PKCE code redirects to the relative next path', async () => {
-    const res = await GET(request('code=xyz&next=%2Fpanel%2Forders'))
-    expectCommonHeaders(res)
-    expect(res.headers.get('location')).toBe('/panel/orders')
-    expect(res.headers.get('set-cookie')).toContain('sb-127-auth-token=session')
   })
 
   it('an invalid or expired token redirects to the relative /login?error=link without cookies', async () => {
     auth.verifyOtp.mockResolvedValue({ error: { message: 'expired' } })
-    const res = await GET(request('token_hash=old&type=invite'))
-    expectCommonHeaders(res)
+    const res = await POST(post({ token_hash: 'old', type: 'invite' }))
+    expectRedirect(res, 303)
     expect(res.headers.get('location')).toBe('/login?error=link')
     expect(res.headers.get('set-cookie')).toBeNull()
   })
 
-  it('a malformed query redirects to /login?error=link without calling Auth', async () => {
-    const res = await GET(request('type=invite'))
+  it('refuses a cross-site POST (Origin of another host) without using the token', async () => {
+    const res = await POST(post({ token_hash: 'abc', type: 'invite' }, { origin: 'https://evil.example' }))
     expect(res.headers.get('location')).toBe('/login?error=link')
     expect(auth.verifyOtp).not.toHaveBeenCalled()
+  })
+
+  it('a POST without a token, or with a PKCE code, is refused', async () => {
+    for (const fields of [{ type: 'invite' }, { code: 'xyz' }] as Record<string, string>[]) {
+      const res = await POST(post(fields))
+      expect(res.headers.get('location')).toBe('/login?error=link')
+    }
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+    expect(auth.exchangeCodeForSession).not.toHaveBeenCalled()
+  })
+
+  it.each(['//evil.example/x', 'https://evil.example/x', '/\\evil.example', 'javascript:alert(1)'])(
+    'a hostile next %s falls back to the default path',
+    async (next) => {
+      const res = await POST(post({ token_hash: 'abc', type: 'invite', next }))
+      expect(res.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
+    },
+  )
+})
+
+describe('GET /auth/callback with a PKCE code', () => {
+  it('a valid code redirects to the relative next path (a scanner cannot use it without the verifier cookie)', async () => {
+    const res = await GET(request('code=xyz&next=%2Fpanel%2Forders'))
+    expectRedirect(res, 307)
+    expect(res.headers.get('location')).toBe('/panel/orders')
+    expect(res.headers.get('set-cookie')).toContain('sb-127-auth-token=session')
   })
 
   it.each([
@@ -92,15 +163,15 @@ describe('GET /auth/callback', () => {
   ])('a hostile next %s falls back to the default path', async (next) => {
     const res = await GET(request(`code=xyz&next=${encodeURIComponent(next)}`))
     expect(res.headers.get('location')).toBe('/panel')
-    const inv = await GET(request(`token_hash=abc&type=invite&next=${encodeURIComponent(next)}`))
-    expect(inv.headers.get('location')).toBe('/auth/set-password?next=%2Fpanel')
   })
 
   it('every Location is a same-origin path (never absolute, never protocol-relative)', async () => {
-    for (const q of ['token_hash=a&type=invite', 'code=c', 'nothing=1']) {
+    for (const q of ['code=c', 'nothing=1']) {
       const loc = (await GET(request(q))).headers.get('location') ?? ''
       expect(loc.startsWith('/')).toBe(true)
       expect(loc.startsWith('//')).toBe(false)
     }
+    const loc = (await POST(post({ token_hash: 'a', type: 'invite' }))).headers.get('location') ?? ''
+    expect(loc.startsWith('/') && !loc.startsWith('//')).toBe(true)
   })
 })

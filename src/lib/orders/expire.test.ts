@@ -95,17 +95,34 @@ describe('handleExpireCron', () => {
     expect(expire).not.toHaveBeenCalled()
   })
 
-  it('fails closed with 503 on a deployed environment with a missing or short secret, logging no value', async () => {
+  it('fails closed with 503 on a misconfigured deployment only for a caller with a valid-looking bearer, logging no value', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const expire = vi.fn(async () => ({ expired: 1 }))
     const short = 'short-secret'
     for (const secret of [undefined, short]) {
-      const res = await handleExpireCron(request(`Bearer ${secret}`), { appEnv: 'staging', secret, expire })
+      // what Vercel Cron would send with a proper secret: told the job is not configured
+      const res = await handleExpireCron(request(`Bearer ${SECRET}`), { appEnv: 'staging', secret, expire })
       expect(res.status).toBe(503)
     }
     expect(expire).not.toHaveBeenCalled()
     expect(spy).toHaveBeenCalledTimes(2)
     expect(spy.mock.calls.flat().join(' ')).not.toContain(short)
+    spy.mockRestore()
+  })
+
+  it('does not reveal a missing or short secret to callers without a valid-looking bearer (401, as for a wrong one)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const expire = vi.fn(async () => ({ expired: 1 }))
+    for (const secret of [undefined, 'short-secret']) {
+      for (const auth of [undefined, 'Bearer ', 'Bearer short-secret', 'Basic abc', `Bearer ${'x'.repeat(31)}`]) {
+        const res = await handleExpireCron(request(auth), { appEnv: 'production', secret, expire })
+        expect(res.status, `${secret} ${auth}`).toBe(401)
+        expect(await res.json()).toEqual({ error: 'unauthorized' })
+      }
+    }
+    expect(expire).not.toHaveBeenCalled()
+    // still logged for the operator, every time
+    expect(spy).toHaveBeenCalled()
     spy.mockRestore()
   })
 
@@ -150,8 +167,9 @@ describe('GET /api/cron/expire-orders', () => {
   it('on staging without CRON_SECRET answers a failure status without throwing', async () => {
     vi.stubEnv('CRON_SECRET', '')
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const res = await GET(new Request(url, { headers: { authorization: 'Bearer ' } }))
+    const res = await GET(new Request(url, { headers: { authorization: `Bearer ${SECRET}` } }))
     expect(res.status).toBe(503)
+    expect((await GET(new Request(url, { headers: { authorization: 'Bearer ' } }))).status).toBe(401)
     expect(storeExpire).not.toHaveBeenCalled()
     spy.mockRestore()
   })

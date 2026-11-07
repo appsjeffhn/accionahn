@@ -33,6 +33,7 @@ function makeStore(init: {
   const admins = new Set(init.admins ?? [])
   const memberships = new Map(Object.entries(init.memberships ?? {}))
   const invites: { email: string; redirectTo: string }[] = []
+  const recoveries: { email: string; redirectTo: string }[] = []
   const deleted: string[] = []
   let nextId = 1
 
@@ -64,13 +65,16 @@ function makeStore(init: {
       u.invited = true
       return { id: u.id }
     },
+    sendPasswordSetup: async (email, redirectTo) => {
+      recoveries.push({ email, redirectTo })
+    },
     insertOwnerMembership: async (userId, tenantId) => {
       if (memberships.has(userId)) return 'exists'
       memberships.set(userId, tenantId)
       return 'inserted'
     },
   }
-  return { store, users, memberships, invites, deleted }
+  return { store, users, memberships, invites, recoveries, deleted }
 }
 
 const callback = (host: string) => `https://${host}/auth/callback`
@@ -78,9 +82,9 @@ const callback = (host: string) => `https://${host}/auth/callback`
 describe('inviteOwner', () => {
   it('invites a new email and creates the owner membership', async () => {
     const s = makeStore()
-    await inviteOwner(admin, 'T1', '  Dueno@Spezia.HN ', { store: s.store, callbackUrl: callback })
+    await inviteOwner(admin, 'T1', '  Dueno@Spezia.Example.Test ', { store: s.store, callbackUrl: callback })
     expect(s.invites).toEqual([
-      { email: 'dueno@spezia.hn', redirectTo: 'https://spezia.accionahn.com/auth/callback' },
+      { email: 'dueno@spezia.example.test', redirectTo: 'https://spezia.accionahn.com/auth/callback' },
     ])
     expect([...s.memberships]).toEqual([['new-1', 'T1']])
   })
@@ -99,11 +103,11 @@ describe('inviteOwner', () => {
 
   it('refuses a user who already owns another tenant, sends no email, creates no membership', async () => {
     const s = makeStore({
-      users: [{ id: 'u9', email: 'otro@x.hn', confirmed: true }],
+      users: [{ id: 'u9', email: 'otro@x.example.test', confirmed: true }],
       memberships: { u9: 'T2' },
     })
     await expect(
-      inviteOwner(admin, 'T1', 'otro@x.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'otro@x.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(AlreadyMemberError)
     expect(s.invites).toEqual([])
     expect([...s.memberships]).toEqual([['u9', 'T2']])
@@ -111,22 +115,22 @@ describe('inviteOwner', () => {
 
   it('refuses a pending invitee of another tenant too (no re-send to the wrong store)', async () => {
     const s = makeStore({
-      users: [{ id: 'u9', email: 'otro@x.hn', confirmed: false }],
+      users: [{ id: 'u9', email: 'otro@x.example.test', confirmed: false }],
       memberships: { u9: 'T2' },
     })
     await expect(
-      inviteOwner(admin, 'T1', 'otro@x.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'otro@x.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(AlreadyMemberError)
     expect(s.invites).toEqual([])
   })
 
   it('refuses an agency admin email', async () => {
     const s = makeStore({
-      users: [{ id: 'adm', email: 'admin@agencia.hn', confirmed: true }],
+      users: [{ id: 'adm', email: 'admin@agencia.example.test', confirmed: true }],
       admins: ['adm'],
     })
     await expect(
-      inviteOwner(admin, 'T1', 'admin@agencia.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'admin@agencia.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(AlreadyMemberError)
     expect(s.memberships.size).toBe(0)
   })
@@ -134,28 +138,38 @@ describe('inviteOwner', () => {
   it('inviting the same email twice for the same tenant does not duplicate', async () => {
     const s = makeStore()
     const deps = { store: s.store, callbackUrl: callback }
-    await inviteOwner(admin, 'T1', 'dueno@spezia.hn', deps)
-    await inviteOwner(admin, 'T1', 'dueno@spezia.hn', deps)
+    await inviteOwner(admin, 'T1', 'dueno@spezia.example.test', deps)
+    await inviteOwner(admin, 'T1', 'dueno@spezia.example.test', deps)
     expect(s.users).toHaveLength(1)
     expect([...s.memberships]).toEqual([['new-1', 'T1']])
     // Not accepted yet: the second call re-sends the same invitation.
     expect(s.invites).toHaveLength(2)
   })
 
-  it('is a no-op for an owner of this tenant who already accepted', async () => {
+  it('an owner of this tenant who already accepted gets a set-password link instead (resent)', async () => {
     const s = makeStore({
-      users: [{ id: 'u1', email: 'dueno@spezia.hn', confirmed: true }],
+      users: [{ id: 'u1', email: 'dueno@spezia.example.test', confirmed: true }],
       memberships: { u1: 'T1' },
     })
-    await inviteOwner(admin, 'T1', 'dueno@spezia.hn', { store: s.store, callbackUrl: callback })
+    const result = await inviteOwner(admin, 'T1', 'dueno@spezia.example.test', { store: s.store, callbackUrl: callback })
+    expect(result).toBe('resent')
     expect(s.invites).toEqual([])
+    expect(s.recoveries).toEqual([
+      { email: 'dueno@spezia.example.test', redirectTo: 'https://spezia.accionahn.com/auth/callback' },
+    ])
     expect([...s.memberships]).toEqual([['u1', 'T1']])
   })
 
+  it('a new or not yet accepted owner gets the invitation (invited), never a recovery link', async () => {
+    const s = makeStore()
+    expect(await inviteOwner(admin, 'T1', 'nuevo@spezia.example.test', { store: s.store, callbackUrl: callback })).toBe('invited')
+    expect(s.recoveries).toEqual([])
+  })
+
   it('refuses an existing confirmed account with no store (it could be a squatted signup)', async () => {
-    const s = makeStore({ users: [{ id: 'u5', email: 'libre@x.hn', confirmed: true }] })
+    const s = makeStore({ users: [{ id: 'u5', email: 'libre@x.example.test', confirmed: true }] })
     await expect(
-      inviteOwner(admin, 'T1', 'libre@x.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'libre@x.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(ExistingAccountError)
     expect(s.memberships.size).toBe(0)
     expect(s.invites).toEqual([])
@@ -163,9 +177,9 @@ describe('inviteOwner', () => {
 
   it('never attaches an unconfirmed self-signup: deletes it and invites a fresh account', async () => {
     const s = makeStore({
-      users: [{ id: 'attacker', email: 'dueno@spezia.hn', confirmed: false, password: 'attacker-pw' }],
+      users: [{ id: 'attacker', email: 'dueno@spezia.example.test', confirmed: false, password: 'attacker-pw' }],
     })
-    await inviteOwner(admin, 'T1', 'dueno@spezia.hn', { store: s.store, callbackUrl: callback })
+    await inviteOwner(admin, 'T1', 'dueno@spezia.example.test', { store: s.store, callbackUrl: callback })
     expect(s.deleted).toEqual(['attacker'])
     expect(s.memberships.has('attacker')).toBe(false)
     expect(s.users).toHaveLength(1)
@@ -178,22 +192,22 @@ describe('inviteOwner', () => {
 
   it('a self-signup that belongs to another tenant is refused, not deleted', async () => {
     const s = makeStore({
-      users: [{ id: 'u7', email: 'x@y.hn', confirmed: false }],
+      users: [{ id: 'u7', email: 'x@y.example.test', confirmed: false }],
       memberships: { u7: 'T2' },
     })
     await expect(
-      inviteOwner(admin, 'T1', 'x@y.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'x@y.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(AlreadyMemberError)
     expect(s.deleted).toEqual([])
   })
 
   it('an invited, still unconfirmed account stays idempotent (re-sent, same user, one membership)', async () => {
     const s = makeStore({
-      users: [{ id: 'u5', email: 'libre@x.hn', confirmed: false, invited: true }],
+      users: [{ id: 'u5', email: 'libre@x.example.test', confirmed: false, invited: true }],
       memberships: { u5: 'T1' },
     })
-    await inviteOwner(admin, 'T1', 'libre@x.hn', { store: s.store, callbackUrl: callback })
-    await inviteOwner(admin, 'T1', 'libre@x.hn', { store: s.store, callbackUrl: callback })
+    await inviteOwner(admin, 'T1', 'libre@x.example.test', { store: s.store, callbackUrl: callback })
+    await inviteOwner(admin, 'T1', 'libre@x.example.test', { store: s.store, callbackUrl: callback })
     expect(s.deleted).toEqual([])
     expect(s.invites).toHaveLength(2)
     expect(s.users.map((u) => u.id)).toEqual(['u5'])
@@ -202,10 +216,10 @@ describe('inviteOwner', () => {
 
   it('a confirmed account without store is still ExistingAccountError, even if once invited', async () => {
     const s = makeStore({
-      users: [{ id: 'u6', email: 'old@x.hn', confirmed: true, invited: true }],
+      users: [{ id: 'u6', email: 'old@x.example.test', confirmed: true, invited: true }],
     })
     await expect(
-      inviteOwner(admin, 'T1', 'old@x.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'old@x.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(ExistingAccountError)
     expect(s.deleted).toEqual([])
     expect(s.memberships.size).toBe(0)
@@ -219,7 +233,7 @@ describe('inviteOwner', () => {
       return insert(userId, 'T1')
     }
     await expect(
-      inviteOwner(admin, 'T1', 'x@y.hn', { store: s.store, callbackUrl: callback }),
+      inviteOwner(admin, 'T1', 'x@y.example.test', { store: s.store, callbackUrl: callback }),
     ).rejects.toThrow(AlreadyMemberError)
   })
 

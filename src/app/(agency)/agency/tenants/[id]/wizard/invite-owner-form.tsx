@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 
 export type InviteState = {
-  status: "idle" | "sent" | "error";
+  // resent: the owner already had an account here; a set-password link was emailed
+  status: "idle" | "sent" | "resent" | "error";
   error?: "invalidEmail" | "alreadyMember" | "existingAccount" | "tenantNotActive" | "failed";
 };
 
@@ -13,6 +14,7 @@ export type InviteLabels = {
   email: string;
   submit: string;
   sent: string;
+  resent: string;
   errors: Record<string, string>;
 };
 
@@ -30,6 +32,7 @@ export function InviteOwnerForm({
       <h2>{labels.title}</h2>
       <p>{labels.help}</p>
       {state.status === "sent" && <p role="status">{labels.sent}</p>}
+      {state.status === "resent" && <p role="status">{labels.resent}</p>}
       {state.status === "error" && (
         <p role="alert" style={{ color: "crimson" }}>
           {labels.errors[state.error ?? "failed"] ?? labels.errors.failed}

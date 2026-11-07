@@ -1,3 +1,4 @@
+import { createRateLimiter, hashedKey } from '../store/throttle'
 import type { Session } from './session'
 
 export type LoginResult = { ok: true } | { ok: false; error: 'invalid' }
@@ -11,6 +12,9 @@ export type LoginDeps = {
   signOut: () => Promise<void>
   // Runs after a successful sign in: true when the account may use this host.
   authorize: () => Promise<boolean>
+  // App-level throttle, asked with the normalized email before Supabase is called;
+  // false = too many attempts (answered with the same generic error).
+  allow?: (email: string) => boolean
 }
 
 const MAX_EMAIL = 254
@@ -22,9 +26,11 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-// Unknown email, wrong password, unconfirmed email, rate limit and "no access on this
-// host" all return the same result, so the form never reveals whether an account exists.
-// Throttling of attempts is done by Supabase Auth (per IP), not here.
+// Unknown email, wrong password, unconfirmed email, rate limit (ours or Supabase's) and
+// "no access on this host" all return the same result, so the form never reveals whether
+// an account exists. Attempts are throttled here (deps.allow, see createLoginThrottle):
+// Supabase Auth's per-IP limit sees the server's address (Vercel), not the visitor's, so
+// it does not protect a single account from guessing.
 export async function loginWithPassword(
   email: string,
   password: string,
@@ -33,6 +39,7 @@ export async function loginWithPassword(
   const normalized = normalizeEmail(email)
   if (!normalized || normalized.length > MAX_EMAIL) return INVALID
   if (!password || password.length > MAX_PASSWORD) return INVALID
+  if (deps.allow && !deps.allow(normalized)) return INVALID
 
   const { error } = await deps.signIn(normalized, password)
   if (error) {
@@ -48,6 +55,23 @@ export async function loginWithPassword(
     if (!allowed) await deps.signOut()
   }
   return allowed ? { ok: true } : INVALID
+}
+
+// Per-process login throttle (in memory, like the storefront's; a shared store is on the
+// before-scaling list). Per client address: a burst of 10, then one attempt a minute.
+// Per email (salted hash of the normalized address, whatever client tries it): a burst of
+// 5, then one every 5 minutes. An attempt needs a token from both.
+export function createLoginThrottle(opts: { now?: () => number } = {}) {
+  const byClient = createRateLimiter({ capacity: 10, refillMs: 60_000, now: opts.now })
+  const byEmail = createRateLimiter({ capacity: 5, refillMs: 5 * 60_000, now: opts.now })
+  return {
+    take({ client, email }: { client: string; email: string }): boolean {
+      const clientOk = byClient.take(client)
+      const emailOk = byEmail.take(hashedKey('email', normalizeEmail(email)))
+      return clientOk && emailOk
+    },
+    keys: () => [...byClient.keys(), ...byEmail.keys()],
+  }
 }
 
 // The agency host has no tenant id; every tenant host has one.

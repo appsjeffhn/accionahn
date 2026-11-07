@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  createLoginThrottle,
   defaultNextPath,
   loginWithPassword,
   safeNextPath,
@@ -10,8 +11,12 @@ import {
 } from "@/lib/auth/login";
 import { getUserClient, readSession } from "@/lib/auth/session";
 import { TENANT_ID_HEADER } from "@/lib/routing/decide-request";
+import { clientKey } from "@/lib/store/throttle";
 
 export type LoginState = { error: "invalid" | null };
+
+// Per server instance; see createLoginThrottle. A limited attempt looks like a wrong password.
+const loginThrottle = createLoginThrottle();
 
 const field = (formData: FormData, name: string) => {
   const value = formData.get(name);
@@ -20,7 +25,9 @@ const field = (formData: FormData, name: string) => {
 
 export async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {
   // Set by the middleware from the host (never from the client): null on the agency host.
-  const hostTenantId = (await headers()).get(TENANT_ID_HEADER);
+  const requestHeaders = await headers();
+  const hostTenantId = requestHeaders.get(TENANT_ID_HEADER);
+  const client = clientKey(requestHeaders);
   const next = safeNextPath(field(formData, "next"), defaultNextPath(hostTenantId));
   const supabase = await getUserClient();
 
@@ -33,6 +40,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
       await supabase.auth.signOut({ scope: "local" });
     },
     authorize: async () => sessionFitsHost(await readSession(supabase), hostTenantId),
+    allow: (email) => loginThrottle.take({ client, email }),
   });
   if (!result.ok) return { error: "invalid" };
   redirect(next);

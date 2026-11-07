@@ -50,6 +50,9 @@ export type OwnerInviteStore = {
   membershipOf: (userId: string) => Promise<{ tenantId: string } | null>
   // Creates the user (or re-sends to an unconfirmed one) and emails the invitation link.
   sendInvite: (email: string, redirectTo: string) => Promise<{ id: string }>
+  // Emails a password-recovery link (recovery template: token_hash, type=recovery) that
+  // lands on redirectTo, for an owner who already accepted but has no usable password.
+  sendPasswordSetup: (email: string, redirectTo: string) => Promise<void>
   // 'exists' when the user already has a membership (memberships.user_id is unique).
   insertOwnerMembership: (userId: string, tenantId: string) => Promise<'inserted' | 'exists'>
 }
@@ -63,12 +66,18 @@ export type InviteDeps = {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MAX_EMAIL = 254
 
+// 'invited': invitation sent (new account, or one that never accepted).
+// 'resent': the owner of this store already accepted; a set-password (recovery) link was
+// sent instead, so an owner locked out (link used by a mail scanner, 15-minute window
+// missed, password forgotten) can get back in.
+export type InviteResult = 'invited' | 'resent'
+
 export async function inviteOwner(
   session: Session | null,
   tenantId: string,
   email: string,
   deps: InviteDeps,
-): Promise<void> {
+): Promise<InviteResult> {
   requireRole(session, 'agency_admin')
   const address = normalizeEmail(email)
   if (address.length > MAX_EMAIL || !EMAIL.test(address)) throw new InvalidEmailError()
@@ -89,8 +98,10 @@ export async function inviteOwner(
     const membership = await store.membershipOf(existing.id)
     if (membership && membership.tenantId !== tenantId) throw new AlreadyMemberError()
     if (existing.confirmed) {
-      if (membership) return // already the owner here and already accepted
-      throw new ExistingAccountError()
+      if (!membership) throw new ExistingAccountError()
+      // already the owner here and already accepted: a set-password link on the store host
+      await store.sendPasswordSetup(address, deps.callbackUrl(tenant.hostname))
+      return 'resent'
     }
     if (!existing.invited) {
       // Unconfirmed self-signup: whoever created it chose its password, and confirming
@@ -106,6 +117,7 @@ export async function inviteOwner(
     const current = await store.membershipOf(userId)
     if (current?.tenantId !== tenantId) throw new AlreadyMemberError()
   }
+  return 'invited'
 }
 
 // Builds the invitation callback on the tenant host. Outside local it is always

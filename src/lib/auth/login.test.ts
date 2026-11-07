@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createLoginThrottle,
   defaultNextPath,
   loginWithPassword,
   safeNextPath,
@@ -76,6 +77,42 @@ describe('loginWithPassword', () => {
     const d = deps({ signIn: async () => ({ error: { status: 500 } }) })
     const err = await loginWithPassword('a@b.co', 'my-secret-password', d).catch((e) => e)
     expect(String(err.message)).not.toContain('my-secret-password')
+  })
+})
+
+describe('login throttling', () => {
+  it('a throttled attempt gets the same generic error and never reaches Supabase', async () => {
+    const d = deps({ allow: vi.fn(() => false) })
+    await expect(loginWithPassword('dueno@example.test', 'secret-pass', d)).resolves.toEqual({ ok: false, error: 'invalid' })
+    expect(d.allow).toHaveBeenCalledWith('dueno@example.test')
+    expect(d.signIn).not.toHaveBeenCalled()
+  })
+
+  it('malformed input is refused before it counts against the limit', async () => {
+    const d = deps({ allow: vi.fn(() => true) })
+    await loginWithPassword('', 'x', d)
+    expect(d.allow).not.toHaveBeenCalled()
+  })
+
+  it('limits attempts per client and per email (normalized), each on its own', () => {
+    let now = 0
+    const t = createLoginThrottle({ now: () => now })
+    // one email from many addresses: the email bucket runs out
+    const byEmail = Array.from({ length: 8 }, (_, i) => t.take({ client: `ip:${i}`, email: 'Dueno@Example.test ' }))
+    expect(byEmail.filter(Boolean).length).toBe(5)
+    expect(t.take({ client: 'ip:new', email: 'dueno@example.test' })).toBe(false)
+    // one address trying many emails: the client bucket runs out
+    const byClient = Array.from({ length: 15 }, (_, i) => t.take({ client: 'ip:x', email: `u${i}@example.test` }))
+    expect(byClient.filter(Boolean).length).toBe(10)
+    // time refills both
+    now += 60 * 60_000
+    expect(t.take({ client: 'ip:x', email: 'dueno@example.test' })).toBe(true)
+  })
+
+  it('never keeps the email in clear text as a key', () => {
+    const t = createLoginThrottle()
+    t.take({ client: 'ip:1', email: 'secret-owner@example.test' })
+    expect(JSON.stringify(t.keys())).not.toContain('secret-owner')
   })
 })
 

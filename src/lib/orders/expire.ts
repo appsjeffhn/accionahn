@@ -53,14 +53,29 @@ const json = (body: unknown, status: number) =>
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   })
 
+// A bearer that could be a real CRON_SECRET: `Bearer ` and at least the minimum length,
+// no spaces. Only such a caller is told that the job is not configured.
+export function looksLikeCronBearer(header: string | null): boolean {
+  return header !== null && header.startsWith('Bearer ') && /^\S+$/.test(header.slice(7))
+    && header.length - 7 >= CRON_SECRET_MIN_LENGTH
+}
+
 // Handler of GET /api/cron/expire-orders (Vercel Cron sends the bearer secret).
+// Fails closed: a deployment with a missing or short secret never runs the job and logs
+// the problem. To the caller it answers 503 only when the request carries a bearer that
+// looks like a real secret (Vercel Cron with a secret configured on its side, so the
+// operator sees the failure in the cron log); anyone else gets the same 401 as for a
+// wrong secret, so the endpoint does not reveal whether the secret is set.
 export async function handleExpireCron(request: Request, deps: CronDeps): Promise<Response> {
+  const authorization = request.headers.get('authorization')
   const problem = cronSecretProblem(deps.appEnv, deps.secret)
   if (problem) {
     console.error(`cron expire-orders refused: ${problem}`)
-    return json({ error: 'cron_not_configured' }, 503)
+    return looksLikeCronBearer(authorization)
+      ? json({ error: 'cron_not_configured' }, 503)
+      : json({ error: 'unauthorized' }, 401)
   }
-  if (!bearerMatches(request.headers.get('authorization'), deps.secret)) {
+  if (!bearerMatches(authorization, deps.secret)) {
     return json({ error: 'unauthorized' }, 401)
   }
   const now = (deps.now ?? (() => new Date()))()
