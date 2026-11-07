@@ -1,5 +1,5 @@
 begin;
-select plan(24);
+select plan(32);
 
 -- The picked time is the start of service (when the team arrives); preparation happens
 -- before it, on site. A booking picked at S occupies [S - prep, S + service + buffer).
@@ -16,24 +16,28 @@ insert into products (id, tenant_id, kind, reservable, name, price_minor) values
   ('22000000-0000-0000-0000-0000000000a2', '12000000-0000-0000-0000-00000000000a', 'simple', true, '{"es":"Una al día","en":"One a day"}', 1000),
   ('22000000-0000-0000-0000-0000000000a3', '12000000-0000-0000-0000-00000000000a', 'simple', true, '{"es":"Aviso","en":"Notice"}', 1000),
   ('22000000-0000-0000-0000-0000000000a4', '12000000-0000-0000-0000-00000000000a', 'simple', true, '{"es":"Margen","en":"Buffer"}', 1000),
-  ('22000000-0000-0000-0000-0000000000a5', '12000000-0000-0000-0000-00000000000a', 'simple', true, '{"es":"Lejos","en":"Far"}', 1000);
+  ('22000000-0000-0000-0000-0000000000a5', '12000000-0000-0000-0000-00000000000a', 'simple', true, '{"es":"Lejos","en":"Far"}', 1000),
+  ('22000000-0000-0000-0000-0000000000a6', '12000000-0000-0000-0000-00000000000a', 'simple', true, '{"es":"Dos al día","en":"Two a day"}', 1000);
 insert into product_calendar (product_id, tenant_id, prep_minutes, service_minutes, buffer_minutes, daily_limit, slot_step_minutes, min_notice_hours, max_days_ahead) values
   ('22000000-0000-0000-0000-0000000000a1', '12000000-0000-0000-0000-00000000000a', 60, 120, 0, null, 30, 0, 36500),
   ('22000000-0000-0000-0000-0000000000a2', '12000000-0000-0000-0000-00000000000a', 60, 120, 0, 1, 30, 0, 36500),
   ('22000000-0000-0000-0000-0000000000a3', '12000000-0000-0000-0000-00000000000a', 60, 60, 0, null, 30, 2, 36500),
   ('22000000-0000-0000-0000-0000000000a4', '12000000-0000-0000-0000-00000000000a', 60, 120, 30, null, 30, 0, 36500),
-  ('22000000-0000-0000-0000-0000000000a5', '12000000-0000-0000-0000-00000000000a', 60, 120, 0, null, 30, 0, 0);
+  ('22000000-0000-0000-0000-0000000000a5', '12000000-0000-0000-0000-00000000000a', 60, 120, 0, null, 30, 0, 0),
+  ('22000000-0000-0000-0000-0000000000a6', '12000000-0000-0000-0000-00000000000a', 60, 120, 0, 2, 30, 0, 36500);
 insert into resources (id, tenant_id, name) values
   ('42000000-0000-0000-0000-0000000000a1', '12000000-0000-0000-0000-00000000000a', 'r1');
 insert into working_hours (tenant_id, resource_id, weekday, opens, closes) values
   ('12000000-0000-0000-0000-00000000000a', null, 1, '08:00', '20:00'),
   -- Tuesday: touching rows form one window 05:00-20:00
   ('12000000-0000-0000-0000-00000000000a', null, 2, '05:00', '08:00'),
-  ('12000000-0000-0000-0000-00000000000a', null, 2, '08:00', '20:00');
+  ('12000000-0000-0000-0000-00000000000a', null, 2, '08:00', '20:00'),
+  -- Wednesday opens at midnight
+  ('12000000-0000-0000-0000-00000000000a', null, 3, '00:00', '20:00');
 insert into orders (id, tenant_id, public_token, status, currency, base_currency, customer_name, customer_phone, subtotal_minor)
 select ('62000000-0000-0000-0000-0000000000' || lpad(n::text, 2, '0'))::uuid, '12000000-0000-0000-0000-00000000000a',
        rpad('62' || lpad(n::text, 2, '0'), 43, 'z'), 'pending_shipping', 'HNL', 'HNL', 'Test', '+50400000000', 0
-  from generate_series(1, 20) as n;
+  from generate_series(1, 30) as n;
 
 set local role service_role;
 
@@ -100,6 +104,27 @@ select throws_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a
   'P0001', 'too_soon', 'a pick 2.5 h ahead with 2 h notice needs preparation 1.5 h ahead: too_soon');
 select throws_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a5', '42000000-0000-0000-0000-0000000000a1', '2099-03-02 10:00 America/Tegucigalpa', '62000000-0000-0000-0000-000000000014')$$,
   'P0001', 'too_far', 'beyond max_days_ahead still raises too_far');
+
+-- a row stored under the old rule ([S, S + 3 h), picked 12:00 on 2099-03-30) next to new ones
+select lives_ok($$insert into public.bookings (tenant_id, product_id, resource_id, order_id, during, status) values ('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a6', '42000000-0000-0000-0000-0000000000a1', '62000000-0000-0000-0000-000000000020', tstzrange('2099-03-30 12:00 America/Tegucigalpa', '2099-03-30 15:00 America/Tegucigalpa', '[)'), 'held')$$,
+  'an old-rule booking occupies 12:00-15:00');
+select lives_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a6', '42000000-0000-0000-0000-0000000000a1', '2099-03-30 10:00 America/Tegucigalpa', '62000000-0000-0000-0000-000000000021')$$,
+  'a new 10:00 pick (09:00-12:00) ends where the old-rule booking starts');
+select throws_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a6', '42000000-0000-0000-0000-0000000000a1', '2099-03-30 16:00 America/Tegucigalpa', '62000000-0000-0000-0000-000000000022')$$,
+  'P0001', 'daily_limit_reached', 'the old-rule row and the new booking both count toward the daily limit of 2');
+select throws_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a1', '42000000-0000-0000-0000-0000000000a1', '2099-03-30 13:00 America/Tegucigalpa', '62000000-0000-0000-0000-000000000023')$$,
+  'P0001', 'slot_taken', 'a 13:00 pick (prep from 12:00) overlaps the old-rule booking');
+select lives_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a1', '42000000-0000-0000-0000-0000000000a1', '2099-03-30 16:00 America/Tegucigalpa', '62000000-0000-0000-0000-000000000024')$$,
+  'a 16:00 pick (prep from 15:00) starts where the old-rule booking ends');
+
+-- midnight: preparation cannot start on the previous day
+select throws_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a1', '42000000-0000-0000-0000-0000000000a1', '2099-03-04 00:30 America/Tegucigalpa', '62000000-0000-0000-0000-000000000025')$$,
+  'P0001', 'outside_hours', 'a 00:30 pick with 60 min prep would prepare from 23:30 the day before');
+select lives_ok($$select public.book_slot('12000000-0000-0000-0000-00000000000a', '22000000-0000-0000-0000-0000000000a1', '42000000-0000-0000-0000-0000000000a1', '2099-03-04 01:00 America/Tegucigalpa', '62000000-0000-0000-0000-000000000026')$$,
+  'a 01:00 pick prepares from midnight, at opening');
+select is((select during from public.bookings where order_id = '62000000-0000-0000-0000-000000000026'),
+  tstzrange('2099-03-04 00:00 America/Tegucigalpa', '2099-03-04 03:00 America/Tegucigalpa', '[)'),
+  'picked 01:00 occupies 00:00-03:00');
 
 -- the function keeps its shape
 select is((select proconfig from pg_proc where oid = 'public.book_slot(uuid, uuid, uuid, timestamptz, uuid)'::regprocedure),

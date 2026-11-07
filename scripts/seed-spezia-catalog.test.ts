@@ -84,7 +84,7 @@ describe('SPEZIA_CATALOG', () => {
     }
   })
 
-  it('the taqueada slots are arrival times: 09:00 (prep from 08:00) to 18:00 (service until 20:00)', async () => {
+  it('the taqueada slots are service starts: 09:00 (prep from 08:00) to 18:00 (service until 20:00)', async () => {
     const t = taqueada()
     const cal = SPEZIA_CATALOG.productCalendars[0]
     const day = '2026-11-13' // a Friday a week ahead, inside notice and max days

@@ -197,10 +197,10 @@ export const SPEZIA_CATALOG: SpeziaCatalog = {
     opens: '08:00',
     closes: '20:00',
   })),
-  // The time the customer picks is the arrival time (start of service). The 60 min of
-  // preparation happen on site BEFORE it and must fit in the opening hours, so with
-  // 08:00-20:00 the picks run from 09:00 (prep from 08:00) to 18:00 (service until 20:00);
-  // a 10:00 pick occupies 09:00-12:00.
+  // The time the customer picks is the service start time. The team arrives 60 min
+  // earlier to prepare on site, and that hour must fit in the opening hours, so with
+  // 08:00-20:00 the picks run from 09:00 (team arrives 08:00) to 18:00 (service until
+  // 20:00); a 10:00 pick occupies 09:00-12:00.
   productCalendars: [
     {
       productId: SPEZIA_IDS.taqueada,

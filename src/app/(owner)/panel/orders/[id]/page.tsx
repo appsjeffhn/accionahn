@@ -5,11 +5,13 @@ import { getLocale, getTranslations } from "next-intl/server";
 import {
   actorKind,
   breakdown,
+  formatClock,
   formatWhen,
   isReviewOverdue,
   lineText,
   moneyOrPending,
   orderActions,
+  prepStart,
   unpricedLines,
   REVIEW_ALERT_HOURS,
 } from "@/lib/orders/orders-view";
@@ -98,6 +100,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             const s = line.snapshot;
             const variant = lineText(s.variantLabel, lang);
             const extras = [...(s.meats ?? []), ...(s.toppings ?? [])];
+            const prep = prepStart(s, order.bookings);
             return (
               <li key={line.position} className="card">
                 <div className="row-card">
@@ -110,7 +113,10 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                 {typeof s.people === "number" && <p className="hint">{t("people", { count: s.people })}</p>}
                 {extras.length > 0 && <p className="hint">{t("extras", { list: extras.join(", ") })}</p>}
                 {s.start ? (
-                  <p className="hint">{t("slot", { when: when(s.start) })}</p>
+                  <p className="hint">
+                    {t("slot", { when: when(s.start) })}
+                    {prep && ` · ${t("prepFrom", { time: formatClock(prep, lang, timeZone) })}`}
+                  </p>
                 ) : (
                   s.date && <p className="hint">{t("date", { date: s.date })}</p>
                 )}

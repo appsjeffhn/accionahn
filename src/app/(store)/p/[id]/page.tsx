@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { listAvailableSlots, type Slot } from "@/lib/calendar/calendar";
+import { listDaySlots, type DaySlots } from "@/lib/calendar/calendar";
 import { formatMoney } from "@/lib/pricing/money";
 import type { ConfigurableDef, Deposit } from "@/lib/pricing/types";
 import { resolveImageSource } from "@/lib/store/assets";
@@ -50,7 +50,8 @@ export default async function ProductPage({
   const slotHere = product.reservable === true && settings.perLineDate;
   const today = todayIn(settings.timezone);
   const day = slotHere ? dayParam(query.day) : null;
-  const slots: Slot[] = day && day >= today ? await listAvailableSlots(ctx.tenantId, id, day) : [];
+  const listed: DaySlots = day && day >= today ? await listDaySlots(ctx.tenantId, id, day) : { slots: [], full: false, prepMinutes: 0 };
+  const slots = listed.slots;
 
   return (
     <article className="store-product">
@@ -156,6 +157,7 @@ export default async function ProductPage({
                   </li>
                 ))}
               </ul>
+              {listed.prepMinutes > 0 && <p className="store-hint">{t("slots.prepHint", { prep: listed.prepMinutes })}</p>}
             </RadioGroupError>
           ))}
       </StoreForm>

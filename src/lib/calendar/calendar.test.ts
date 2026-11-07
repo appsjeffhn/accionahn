@@ -36,7 +36,7 @@ const list = (day: CalendarDay, resourceId?: string, now = NOW) =>
   listAvailableSlots('A', 'cake', DAY, resourceId, { store: storeFor(day), now })
 
 describe('listAvailableSlots', () => {
-  it('Spezia: the start is the arrival time; 60 min prep before it, 120 min service after, 8:00-20:00', async () => {
+  it('Spezia: the start is the service start; the team arrives 60 min earlier to prepare, 120 min service after, 8:00-20:00', async () => {
     // occupied 14:00-17:00 local = 20:00Z-23:00Z
     const day = spezia({
       bookings: [{ resourceId: 'r1', productId: 'other', start: '2099-03-02T20:00:00Z', end: '2099-03-02T23:00:00Z' }],
@@ -156,7 +156,7 @@ describe('listAvailableSlots', () => {
   it('honours min notice and max days ahead', async () => {
     const day = spezia({ calendar: { ...spezia().calendar!, minNoticeHours: 2 } })
     // now = 09:00 local; preparation may start at 11:00 local at the earliest, so the
-    // first arrival time is 12:00 local
+    // first service start is 12:00 local
     const slots = await list(day, undefined, () => new Date('2099-03-02T15:00:00Z'))
     expect(slots[0].start).toBe('2099-03-02T18:00:00.000Z')
     const far = spezia({ calendar: { ...spezia().calendar!, maxDaysAhead: 180 } })
@@ -171,6 +171,45 @@ describe('listAvailableSlots', () => {
 
   it('rejects a malformed day', async () => {
     await expect(listAvailableSlots('A', 'p', '2099-3-2', undefined, { store: storeFor(spezia()) })).rejects.toThrow(RangeError)
+  })
+})
+
+describe('listAvailableSlots: preparation at the edges of the day', () => {
+  it('midnight: an 00:30 start would prepare from 23:30 the day before, so the first start is 01:00', async () => {
+    const day = spezia({ hours: [{ resourceId: null, weekday: 1, opens: '00:00', closes: '20:00' }] })
+    const starts = (await list(day)).map((s) => s.start)
+    expect(starts).not.toContain(new Date(`${DAY}T00:30:00-06:00`).toISOString())
+    expect(starts[0]).toBe(new Date(`${DAY}T01:00:00-06:00`).toISOString())
+  })
+
+  it('DST jump (America/New_York, 2099-03-08 02:00 -> 03:00): the prep span is real minutes before the start', async () => {
+    const sunday = '2099-03-08'
+    const base = spezia({
+      timezone: 'America/New_York',
+      calendar: { ...spezia().calendar!, prepMinutes: 60, serviceMinutes: 60, slotStepMinutes: 60 },
+      hours: [{ resourceId: null, weekday: 0, opens: '00:00', closes: '12:00' }],
+    })
+    const at = (day: CalendarDay) =>
+      listAvailableSlots('A', 'cake', sunday, undefined, { store: storeFor(day), now: NOW }).then((s) => s.map((x) => x.start))
+    // 03:00 EDT = 07:00Z: preparation runs 06:00Z-07:00Z (01:00-02:00 EST, then the jump)
+    const free = await at(base)
+    expect(free).toContain('2099-03-08T07:00:00.000Z')
+    expect(free).toContain('2099-03-08T06:00:00.000Z') // 01:00 EST, prep from 00:00 EST
+    // a booking 06:00Z-06:30Z falls inside that hour of preparation: 03:00 EDT is not offered
+    const busy = await at({ ...base, bookings: [{ resourceId: 'r1', productId: 'x', start: '2099-03-08T06:30:00Z', end: '2099-03-08T06:45:00Z' }] })
+    expect(busy).not.toContain('2099-03-08T07:00:00.000Z')
+    // one ending at 06:00Z (01:00 EST) does not touch it
+    const before = await at({ ...base, bookings: [{ resourceId: 'r1', productId: 'x', start: '2099-03-08T05:30:00Z', end: '2099-03-08T06:00:00Z' }] })
+    expect(before).toContain('2099-03-08T07:00:00.000Z')
+  })
+})
+
+describe('listDaySlots: preparation minutes for the hint', () => {
+  it('returns the product prep minutes, 0 without a calendar', async () => {
+    const open = await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(spezia()), now: NOW })
+    expect(open.prepMinutes).toBe(60)
+    const none = await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(spezia({ calendar: null })), now: NOW })
+    expect(none.prepMinutes).toBe(0)
   })
 })
 
@@ -193,7 +232,7 @@ describe('listDaySlots: why a day has no slots', () => {
       calendar: { ...spezia().calendar!, dailyLimit: 1 },
       bookings: [{ resourceId: 'r9', productId: 'cake', start: '2099-03-02T16:00:00Z', end: '2099-03-02T19:00:00Z' }],
     })
-    expect(await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(full), now: NOW })).toEqual({ slots: [], full: true })
+    expect(await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(full), now: NOW })).toEqual({ slots: [], full: true, prepMinutes: 60 })
     const open = await listDaySlots('A', 'cake', DAY, undefined, { store: storeFor(spezia()), now: NOW })
     expect(open.full).toBe(false)
     expect(open.slots.length).toBeGreaterThan(0)
@@ -201,7 +240,7 @@ describe('listDaySlots: why a day has no slots', () => {
       store: storeFor(spezia({ closed: [{ resourceId: null, day: DAY }] })),
       now: NOW,
     })
-    expect(closed).toEqual({ slots: [], full: false })
+    expect(closed).toEqual({ slots: [], full: false, prepMinutes: 60 })
   })
 })
 
